@@ -9,8 +9,14 @@ countinghouse client packs: the one tool the model sees.
 
 ## What it does
 
-One tool, `ci_failure_triage`. It is a carrying scenario: one call does what
-would take the model dozens of GitHub calls and thousands of log lines.
+*Design, not yet built: this is what the tool does once countinghouse can
+load it (RC1-min and LM1). The chain is tested in-process here; it has not
+run on a live runtime.*
+
+One tool, `ci_failure_triage`. Chain kind: **carrying: the logs cross the
+runtime, not the model.** One call does what would take the model dozens of
+GitHub calls and thousands of log lines, and only the few lines that explain
+the failure reach it.
 
 - **Server:** GitHub, through [ch-access-github](https://github.com/mchen6/ch-access-github),
   which owns the remote. This module declares no remote and never sees a token.
@@ -25,19 +31,28 @@ would take the model dozens of GitHub calls and thousands of log lines.
   `repo`, `window` (default 50 runs), `max_logs` (default 20 logs per
   call), `owner_hint` (default true; false leaves the logins out).
 
-**What it returns:**
+**What it returns** (declared in `schema.json` as a closed object of one of
+two shapes). The triage result has exactly these fields:
 - **`summary`:** one sentence.
-- **`run`:** id, url, branch, commit, workflow, job and failing step.
-- **`errors`:** at most 40 error lines from the failing step.
-- **`history`:** the failure's signature, how often it was seen in the window,
-  its first and last appearance with their commits, its verdict (`new`,
-  `flaky` or `recurring`), and the runs it was seen in.
-- **`owner_hint`:** at most three GitHub logins and why, or null.
-- **`coverage`:** described below.
+- **`run`:** `{id, url, branch, commit, workflow, job, step}`.
+- **`errors`:** at most 40 strings, the error lines of the failing step.
+- **`history`:** `{signature, count, window, verdict, firstSeen, lastSeen,
+  runIds}`, or `null` when the run's log could not be read and the cache does
+  not know it.
+  - `firstSeen` and `lastSeen` are `{runId, commit, createdAt}`.
+  - `verdict` is `new`, `flaky` or `recurring`.
+- **`owner_hint`:** `{logins, why}`, at most three GitHub logins with one
+  reason each, or `null`.
+- **`coverage`:** `{runsListed, failedRuns, logsFetched, logsExpired,
+  logsTruncated, logsUnavailable, cacheHits, capHit}`.
+  - `logsUnavailable` is a list of `{runId, job}`.
 
-When no run in the window failed, it returns `status: 'no-failed-run'` with
-the latest success. The runtime appends the receipt (lines and bytes read,
-lines that reached the model); this module never sets it.
+When no run in the window failed, the answer has exactly `{status:
+'no-failed-run', summary, lastSuccess, coverage}`. `lastSuccess` is `{id,
+url, branch, commit, workflow, createdAt}`, or `null`.
+
+The runtime appends `receipt: {calls, linesIn, bytesIn, linesOut, bytesOut,
+servers}` and its sentence; this module never sets it.
 
 **Coverage, stated, never hidden:**
 - runs considered (the failing run's workflow only, so a Pages deploy is not
@@ -72,9 +87,7 @@ The summary ends with the gaps when there are any.
 `dependencies`. The tests use each part's tarball, recorded in
 [test/fixtures/parts](test/fixtures/parts/README.md).
 
-Part of the countinghouse client packs. The design, the plan and the
-acceptance tests live in [ch-packs](https://github.com/mchen6/ch-packs);
-each package has its own repository (maintainer's decision, 2026-11-11).
+Each package has its own repository; the family's design, plan and acceptance tests are in a repository that stays private until the first release.
 
 ## Development
 
