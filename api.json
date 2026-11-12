@@ -1,0 +1,26 @@
+{
+  "device": {
+    "friendlyName": "ch-pack-ci-failure-triage",
+    "manufacturer": "ch-packs",
+    "modelDescription": "Scenario module of the ch-packs family: one tool, ci_failure_triage, that answers \"why did CI fail?\" from GitHub Actions through ch-access-github and the step modules, with the failing step, the error lines, the cross-run history and a measured receipt.",
+    "serviceList": {
+      "urn:ch-packs:serviceID:triageService": {
+        "actionList": [
+          {
+            "name": "triage",
+            "description": "Call this first when a CI run failed. It answers why: the failing run, job and step, the few error lines (redacted), whether the failure is new, flaky or recurring across the last runs with the commit where it first appeared, the GitHub logins who last touched it, and coverage that says what it could not read (expired, truncated or unavailable logs, the log cap). The repository is the one you are working in; pass repo: 'owner/name' to choose another, and run_id for a run other than the latest failed one. When no run failed it says so and names the latest success. Show the receipt line from the result verbatim.",
+            "input": {
+              "schema": "/triageService/triage/input"
+            },
+            "output": {
+              "schema": "/triageService/triage/output"
+            },
+            "fault": {
+              "schema": "/fault/triageService/triage/fault"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

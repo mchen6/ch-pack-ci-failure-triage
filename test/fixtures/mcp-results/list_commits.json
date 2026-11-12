@@ -1,0 +1,25 @@
+{
+  "_recorded": {
+    "at": "2026-11-11",
+    "server": "github-mcp-server (remote)",
+    "endpoint": "https://api.githubcopilot.com/mcp/",
+    "toolsets": "actions,repos"
+  },
+  "request": {
+    "name": "list_commits",
+    "arguments": {
+      "owner": "mchen6",
+      "repo": "countinghouse",
+      "sha": "5c23de037f76a066f7b40fbf9ba4c993ceed8c42",
+      "perPage": 1
+    }
+  },
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "[{\"sha\":\"5c23de037f76a066f7b40fbf9ba4c993ceed8c42\",\"html_url\":\"https://github.com/mchen6/countinghouse/commit/5c23de037f76a066f7b40fbf9ba4c993ceed8c42\",\"commit\":{\"message\":\"feat(identity): an opaque per-user id, its secret, and the operator's lookup\\n\\nR2-1 Task 1. Every user gets an opaque id, \\\"u_\\\" and 22 characters of\\nbase64url(HMAC-SHA256(secret, source)), the same across every module on\\nthis server. The source is the auth entry's optional stable `id` field\\n(\\\"id:\\\" + field) when it has one, else the API key (\\\"key:\\\" + apiKey):\\ndomain-separated, so an id equal to another user's key never yields that\\nuser's id. With a stable id a key rotation keeps the user's id; without\\none the id changes with the key.\\n\\nlib/identity.js: initSync loads or creates the secret -- 32 random bytes\\nas 64 hex characters in <moduleDataPath>/.identity-secret (0600, written\\nunder a temporary name and renamed, never read through a link, refused if\\ngroup- or world-readable) or COUNTINGHOUSE_IDENTITY_SECRET in the same\\nform; a variable in another form, or a file and a variable that differ,\\nrefuse startup with exit 2 and never echo a value. The index\\n(id -> {apiKey, userName, isAdmin}) is built from provider.entries() at\\nstartup and on every reload, and never leaves the main thread (every call\\nthrows in a worker). lookup() is synchronous for the billing hot path;\\nresolve() asks the provider once more on a miss, at most every 5 s.\\n\\nProviders: entries() on file, sqlite and CouchDB; the file provider checks\\nthe id field (1-128 printable characters, unique) at startup -- two entries\\nsharing one exit 2, \\\"<path>: entries 2 and 5 share id\\\", never a key --\\nand on reload; sqlite adds a nullable `id` column (unique where set) on\\nopen, and bin/countinghouse-auth-sqlite.js gets `set-id <apiKey> <id>`,\\nwhich adds the column too (the CLI opens the database itself); CouchDB reads\\nthe id as the view's 5th value when the design document emits one (the one\\ninit-db installs emits four, so users fall back to their key until it is\\nre-run; untested against a live CouchDB here).\\n\\nThe operator's lookup: POST /identity-lookup {id} (admin only) and the\\nauthoring tool countinghouse_lookup_identity answer {id, userName,\\nisAdmin} or IDENTITY_NOT_FOUND (new, both locales), never the key.\\nPOST /reload-auth and its tool rebuild the index after a reload.\\n\\nEverything that named a tenant by its key moves to the id: the key\\nfingerprint in log lines is `id u_...` on a started main thread (the old\\nsha256 prefix before init and in workers); a repeatable job's scheduler id\\nis <id>:<name>, and removal still finds a scheduler stored under the old\\nowner prefix. Under --debug the debug key is indexed as {userName:\\n'debug', isAdmin: true}.\\n\\ntest/auth/31: idFor is stable, distinct between keys, u_ + 22 characters\\nand changes with the secret; a stable id survives a key change; domain\\nseparation; the duplicate-id refusal names positions and no key; the\\nsecret file is created 0600, a 0644 one, a symlinked one, a variable in\\nthe wrong form, and a file and variable that differ all refuse startup\\nwithout echoing a value; the variable overrides and writes no file; the\\nroute and the tool answer an admin, refuse a non-admin, say\\nIDENTITY_NOT_FOUND for an unknown id and never hold a key; an entry added\\nby /reload-auth resolves; sqlite set-id stores, a duplicate fails without\\na key, an old database is migrated on open. Failed before (no\\nlib/identity; the routes absent; the refused starts started), passes now;\\nthe whole test/auth folder passes, the route inventory and the golden\\ntools/list are updated for the new route and tool. CHANGELOG,\\ncli-and-api-reference, authentication.md (a new section) and\\nupgrading-to-8.md say so.\\n\\nCo-Authored-By: Claude Fable 5.1 <removed@example.invalid>\",\"author\":{\"name\":\"Example Author\",\"email\":\"removed@example.invalid\",\"date\":\"2026-11-10T07:26:07Z\"},\"committer\":{\"name\":\"Example Author\",\"email\":\"removed@example.invalid\",\"date\":\"2026-11-10T07:26:07Z\"}},\"author\":{\"login\":\"mchen6\",\"id\":1168741,\"profile_url\":\"https://github.com/mchen6\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/1168741?v=4\"},\"committer\":{\"login\":\"mchen6\",\"id\":1168741,\"profile_url\":\"https://github.com/mchen6\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/1168741?v=4\"}}]"
+      }
+    ]
+  }
+}
