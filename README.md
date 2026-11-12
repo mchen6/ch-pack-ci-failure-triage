@@ -51,8 +51,11 @@ When no run in the window failed, the answer has exactly `{status:
 'no-failed-run', summary, lastSuccess, coverage}`. `lastSuccess` is `{id,
 url, branch, commit, workflow, createdAt}`, or `null`.
 
-The runtime appends `receipt: {calls, linesIn, bytesIn, linesOut, bytesOut,
-servers}` and its sentence; this module never sets it.
+The runtime adds the receipt in the result's `_meta` and as a second text
+block: `_meta['countinghouse/receipt']` is `{calls, linesIn, bytesIn,
+linesOut, bytesOut, servers}`, and the text block is its one sentence. The
+answer above is the result's `structuredContent`, unchanged. This module
+never sets the receipt.
 
 **Coverage, stated, never hidden:**
 - runs considered (the failing run's workflow only, so a Pages deploy is not
