@@ -1,0 +1,14 @@
+# The parts, as tarballs
+
+The scenario's tests run the real step and access handlers in-process. The sibling repositories are private and none is on npm yet, so each part is `npm pack` of its repository's `main` at the commit below, used here as a `file:` devDependency. To refresh one: pack the new commit, replace the file, and update its row.
+
+| Package | Repository at | File | Integrity |
+|---|---|---|---|
+| `@countinghouse/ch-step-log-clean` | [mchen6/ch-step-log-clean@bb465a2](https://github.com/mchen6/ch-step-log-clean/commit/bb465a2d81c52bfde76a5e8c655741ae991e6392) | `countinghouse-ch-step-log-clean-0.1.0.tgz` | `sha512-ji45R4JaoepNm/CUmNEZBUhh+/sqBhohLclwVDh12k93onmbilMlG3wxMxtftP8UF4DE9ce2s245JNhKgI4iQw==` |
+| `@countinghouse/ch-step-error-patterns` | [mchen6/ch-step-error-patterns@a20b4a9](https://github.com/mchen6/ch-step-error-patterns/commit/a20b4a91dbeac5d7d5d030d71b13425a643a6a11) | `countinghouse-ch-step-error-patterns-0.1.0.tgz` | `sha512-HyaGZjfq8zQC/9zeNCcKy1ro6/ilAzm68VjMEtdpjX1kvDx7BaL7kWhPstoVPEImeq5d5D94kcATgtmXfWZDwg==` |
+| `@countinghouse/ch-step-failure-signature` | [mchen6/ch-step-failure-signature@e5906ac](https://github.com/mchen6/ch-step-failure-signature/commit/e5906acbf8ef9b077b56bde1571a378d146db65c) | `countinghouse-ch-step-failure-signature-0.1.0.tgz` | `sha512-TpA6FHVXX0k9xMUSrt3tcbmIBUeI7vjokjJq3u1raF1QtT7OsF9giRUVqbgOSBH4TilDwZXX9MW2knSBycuu8Q==` |
+| `@countinghouse/ch-step-dedupe` | [mchen6/ch-step-dedupe@ae64a76](https://github.com/mchen6/ch-step-dedupe/commit/ae64a7624042dfc92881410a8487ce3b4de5c23d) | `countinghouse-ch-step-dedupe-0.1.0.tgz` | `sha512-YYC2dRDxXbqz3mY2JlemcqcNpvaKmU9hvwS6zl35jqZUhwqVAQM4lVegDDMWsKxHYejMYRfYY/4Xpe2G2ZAjfw==` |
+| `@countinghouse/ch-step-owner-hint` | [mchen6/ch-step-owner-hint@053ab32](https://github.com/mchen6/ch-step-owner-hint/commit/053ab322b8639f3151de118e1d2bf6b9c76132ba) | `countinghouse-ch-step-owner-hint-0.1.0.tgz` | `sha512-b5vsLQmwaTEpaGb6VMAhDQFWjlkoaK/r7B+Ol4CHKzGdo3BnQEil/jbc2nFiszRWaAa5e3V1eQIAMypVGeVmbg==` |
+| `@countinghouse/ch-step-redact` | [mchen6/ch-step-redact@23be966](https://github.com/mchen6/ch-step-redact/commit/23be96697d7244e8e1e39520b7c952e62aa8fc18) | `countinghouse-ch-step-redact-0.1.0.tgz` | `sha512-BjpqHtyiymBQVF34WjeCSuXjnyEEb5GzFR/Ue1TAPpxRPnpvhvuzmy0slr+Fc+nXhpZvOoMjDRWA2bSZjxMC8g==` |
+| `@countinghouse/ch-step-report` | [mchen6/ch-step-report@d98c18c](https://github.com/mchen6/ch-step-report/commit/d98c18c) (0.2.0) | `countinghouse-ch-step-report-0.2.0.tgz` | `sha512-7PQV4eHe3tfaNL46AXq/EQ4qGiaNuoJ2gblSeTvwd3ZQIcUr5s9phOuLDTg/aQ1PdvuWlEtw+wxlwUFJyP/qCQ==` |
+| `@countinghouse/ch-access-github` | [mchen6/ch-access-github@6b3fc58](https://github.com/mchen6/ch-access-github/commit/6b3fc588c563175f84d80ed491154c730b90b65c) | `countinghouse-ch-access-github-0.1.0.tgz` | `sha512-SGwXyccxhibdJp6++zvep8eCB6PQx/unpL5nMoiYanGqBPOq/BmbqTtXhMsysRQ69rluDWM+B4d46kN8noR5hw==` |

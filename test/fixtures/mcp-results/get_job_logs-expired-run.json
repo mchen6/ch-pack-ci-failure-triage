@@ -1,0 +1,27 @@
+{
+  "_recorded": {
+    "at": "2026-11-11",
+    "server": "github-mcp-server (remote)",
+    "endpoint": "https://api.githubcopilot.com/mcp/",
+    "toolsets": "actions,repos"
+  },
+  "request": {
+    "name": "get_job_logs",
+    "arguments": {
+      "owner": "mchen6",
+      "repo": "countinghouse",
+      "run_id": 31256649524,
+      "failed_only": true,
+      "return_content": true,
+      "tail_lines": 200000
+    }
+  },
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"failed_jobs\":1,\"logs\":[{\"error\":\"failed to get job logs for job 93100912193: unexpected status code: 410 Gone\",\"job_id\":93100912193,\"job_name\":\"test (22)\"}],\"message\":\"Retrieved logs for 1 failed jobs\",\"return_format\":{\"content\":true,\"urls\":false},\"run_id\":31256649524,\"total_jobs\":2}"
+      }
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "_recorded": {
+    "at": "2026-11-11",
+    "server": "github-mcp-server (remote)",
+    "endpoint": "https://api.githubcopilot.com/mcp/",
+    "toolsets": "actions,repos"
+  },
+  "request": {
+    "name": "get_job_logs",
+    "arguments": {
+      "owner": "mchen6",
+      "repo": "countinghouse",
+      "job_id": 1,
+      "return_content": true,
+      "tail_lines": 200000
+    }
+  },
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "failed to get job logs: failed to get job logs for job 1: unexpected status code: 404 Not Found"
+      }
+    ],
+    "isError": true
+  }
+}

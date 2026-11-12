@@ -1,0 +1,443 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "#/",
+  "type": "object",
+  "triageService": {
+    "ci_failure_triage": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "title": "a specific run, by id; default: the latest failed run",
+            "type": "string",
+            "pattern": "^[1-9]\\d{0,15}$"
+          },
+          "repo": {
+            "title": "owner/name; default: the repository the agent is working in",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$"
+          },
+          "window": {
+            "title": "how many recent runs to consider",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "max_logs": {
+            "title": "logs to fetch at most in this call; the rest wait for the next call",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          "owner_hint": {
+            "title": "name the GitHub logins who last touched the failure",
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "summary": {
+                "title": "one sentence",
+                "type": "string"
+              },
+              "run": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "branch": {
+                    "type": "string"
+                  },
+                  "commit": {
+                    "type": "string"
+                  },
+                  "workflow": {
+                    "type": "string"
+                  },
+                  "job": {
+                    "type": "string"
+                  },
+                  "step": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "url",
+                  "branch",
+                  "commit",
+                  "workflow",
+                  "job",
+                  "step"
+                ],
+                "additionalProperties": false
+              },
+              "errors": {
+                "title": "the few error lines, redacted",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "history": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "signature": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$"
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "window": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "verdict": {
+                        "type": "string",
+                        "enum": [
+                          "new",
+                          "flaky",
+                          "recurring"
+                        ]
+                      },
+                      "firstSeen": {
+                        "type": "object",
+                        "properties": {
+                          "runId": {
+                            "type": "string"
+                          },
+                          "commit": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "runId",
+                          "commit",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "lastSeen": {
+                        "type": "object",
+                        "properties": {
+                          "runId": {
+                            "type": "string"
+                          },
+                          "commit": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "runId",
+                          "commit",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "runIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "signature",
+                      "count",
+                      "window",
+                      "verdict",
+                      "firstSeen",
+                      "lastSeen",
+                      "runIds"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "owner_hint": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "logins": {
+                        "title": "GitHub logins, as ch-step-owner-hint returns them",
+                        "type": "array",
+                        "maxItems": 3,
+                        "items": {
+                          "type": "string",
+                          "pattern": "^[^@\\s]+$"
+                        }
+                      },
+                      "why": {
+                        "type": "array",
+                        "maxItems": 3,
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "logins",
+                      "why"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "coverage": {
+                "type": "object",
+                "properties": {
+                  "runsListed": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "failedRuns": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsFetched": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsExpired": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsTruncated": {
+                    "title": "logs the server returned shorter than the log",
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsUnavailable": {
+                    "title": "logs that could not be read for another reason, by run and job (the job name redacted)",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "runId": {
+                          "type": "string"
+                        },
+                        "job": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "runId",
+                        "job"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 50
+                  },
+                  "cacheHits": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "capHit": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "runsListed",
+                  "failedRuns",
+                  "logsFetched",
+                  "logsExpired",
+                  "logsTruncated",
+                  "logsUnavailable",
+                  "cacheHits",
+                  "capHit"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "summary",
+              "run",
+              "errors",
+              "history",
+              "owner_hint",
+              "coverage"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "no-failed-run"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "lastSuccess": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      },
+                      "branch": {
+                        "type": "string"
+                      },
+                      "commit": {
+                        "type": "string"
+                      },
+                      "workflow": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "url",
+                      "branch",
+                      "commit",
+                      "workflow",
+                      "createdAt"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "coverage": {
+                "type": "object",
+                "properties": {
+                  "runsListed": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "failedRuns": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsFetched": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsExpired": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsTruncated": {
+                    "title": "logs the server returned shorter than the log",
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsUnavailable": {
+                    "title": "logs that could not be read for another reason, by run and job (the job name redacted)",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "runId": {
+                          "type": "string"
+                        },
+                        "job": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "runId",
+                        "job"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 50
+                  },
+                  "cacheHits": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "capHit": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "runsListed",
+                  "failedRuns",
+                  "logsFetched",
+                  "logsExpired",
+                  "logsTruncated",
+                  "logsUnavailable",
+                  "cacheHits",
+                  "capHit"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "status",
+              "summary",
+              "lastSuccess",
+              "coverage"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "fault": {
+    "triageService": {
+      "ci_failure_triage": {
+        "fault": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "title": "specific error reason",
+              "type": "string"
+            },
+            "info": {
+              "title": "detailed error info",
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
