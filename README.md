@@ -41,11 +41,13 @@ lines that reached the model); this module never sets it.
 
 **Coverage, stated, never hidden:**
 - runs considered (the failing run's workflow only, so a Pages deploy is not
-  in a CI window);
+  in a CI window). A failed run is one that failed, timed out or failed to
+  start;
 - failed runs;
 - logs fetched;
 - logs expired (past GitHub's retention), truncated by the server, or
-  unavailable for another reason, by run and job;
+  unavailable for another reason, by run and job. An older run that cannot
+  be read is counted here, never fatal;
 - cache hits;
 - whether the `max_logs` cap stopped it.
 
@@ -60,8 +62,10 @@ The summary ends with the gaps when there are any.
   other commits it failed on. It is a suggestion, and there is no blame call.
 - The cache, `/data/<owner>__<name>/fingerprints.json`, holds run ids,
   signatures, commit SHAs, dates and sha256 hashes of the normalised error
-  lines, never a raw line or a token. A second call fetches only the failed
-  runs it has not seen, plus the latest one for its error lines.
+  lines, never a raw line or a token, and remembers logs that have expired.
+  A second call fetches only the failed runs it has not seen, plus the latest
+  one for its error lines. When that one's log can no longer be read, its
+  cached signature still gives the history.
 
 **The parts** are named in `countinghouse.calls`: ch-access-github and the seven
 `ch-step-*` modules. The launcher installs them, and this package has no

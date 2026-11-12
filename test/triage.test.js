@@ -80,8 +80,10 @@ test('the cache makes the second call fetch only new runs', async () => {
   assert.strictEqual(first.output.history.count, 3, 'one signature: the numbers are normalised away');
   const again = world({runs});
   const second = await go(again, {}, first.dataRoot);
-  assert.strictEqual(second.output.coverage.cacheHits, first.output.coverage.logsFetched);
+  // The latest failed run is fetched again for its error lines; the others come from the cache.
   assert.strictEqual(again.logsFetched(), 1, 'only the latest failed run, for its error lines');
+  assert.strictEqual(second.output.coverage.logsFetched, 1);
+  assert.strictEqual(second.output.coverage.cacheHits + second.output.coverage.logsFetched, first.output.coverage.logsFetched);
   assert.strictEqual(second.output.history.count, 3);
   const cache = JSON.parse(fs.readFileSync(path.join(first.dataRoot, 'acme__widgets', 'fingerprints.json'), 'utf8'));
   assert.strictEqual(cache.version, 1);
@@ -144,4 +146,86 @@ test('a 60,000-line log triages in under 3 seconds in-process', async () => {
   process.stdout.write(`# a 60,000-line log: ${ms.toFixed(0)} ms through the chain\n`);
   assert.ok(ms < 3000, `${ms} ms`);
   assert.ok(output.errors.length > 0);
+});
+
+// From /code-review medium on #1.
+test('a private key block in the error lines is masked whole', async () => {
+  const key = ['-----BEGIN RSA PRIVATE KEY-----', 'MIIEowIBAAKCAQEAu1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gun', 'VTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u+qKhbwKfBstIs+bMY2Zkp18gnTxK', '-----END RSA PRIVATE KEY-----'];
+  const gh = world({runs: [run(2, 'failure', 2, {jobs: [job(20, runnerLog('Run npm test', ['Error: bad key', ...key]))]})]});
+  const {output} = await go(gh, {});
+  const text = JSON.stringify(output);
+  assert.ok(!text.includes('MIIEow') && !text.includes('VTLw7o'), text);
+});
+
+test('a history run that cannot be read is counted, not fatal', async () => {
+  const runs = [run(3, 'failure', 3, {jobs: [job(30, FAIL(1))]}), run(2, 'failure', 2, {jobs: [job(20, FAIL(2))]})];
+  const base = world({runs});
+  const flaky = (tool, args) => (tool === 'actions_list' && args.method === 'list_workflow_jobs' && args.resource_id === '2'
+    ? {isError: true, content: [{type: 'text', text: 'failed to list jobs: 502 Bad Gateway'}]} : base(tool, args));
+  const {output} = await go(flaky, {});
+  assert.strictEqual(output.run.id, '3');
+  assert.deepStrictEqual(output.coverage.logsUnavailable, [{runId: '2', job: '(jobs unavailable)'}]);
+});
+
+test('an owner hint that cannot be read is left out, not fatal', async () => {
+  const base = world({runs: [run(2, 'failure', 2, {jobs: [job(20, FAIL(1))]})]});
+  const broken = (tool, args) => (tool === 'list_commits' ? {isError: true, content: [{type: 'text', text: '503 Service Unavailable'}]} : base(tool, args));
+  const {output} = await go(broken, {});
+  assert.ok(output.history != null);
+  assert.deepStrictEqual(output.owner_hint, {logins: [], why: []});
+});
+
+test('a target whose log has expired keeps the history the cache knows', async () => {
+  const runs = (log) => [run(3, 'failure', 3, {jobs: [job(30, log)]}), run(2, 'failure', 2, {jobs: [job(20, FAIL(2))]})];
+  const first = await go(world({runs: runs(FAIL(1))}), {});
+  assert.strictEqual(first.output.history.count, 2);
+  const later = await go(world({runs: runs('expired')}), {}, first.dataRoot);
+  assert.strictEqual(later.output.coverage.logsExpired, 1);
+  assert.ok(later.output.history != null, 'the cached signature stands in');
+  assert.strictEqual(later.output.history.count, 2);
+});
+
+test('an expired log is remembered: the next call does not fetch it again', async () => {
+  const runs = [run(3, 'failure', 3, {jobs: [job(30, FAIL(1))]}), run(2, 'failure', 2, {jobs: [job(20, 'expired')]})];
+  const first = await go(world({runs}), {});
+  assert.strictEqual(first.output.coverage.logsExpired, 1);
+  const again = world({runs});
+  const second = await go(again, {}, first.dataRoot);
+  assert.strictEqual(again.logsFetched(), 1, 'only the latest');
+  assert.strictEqual(second.output.coverage.logsExpired, 1, 'still said');
+});
+
+test('the history window is the runs considered, not the runs listed', async () => {
+  const runs = [run(9, 'failure', 9, {jobs: [job(90, FAIL(1))]}), run(8, 'success', 8, {workflow: 'pages build and deployment'}), run(7, 'failure', 7, {jobs: [job(70, FAIL(2))]})];
+  const {output} = await go(world({runs}), {});
+  assert.strictEqual(output.history.window, 2);
+  assert.match(output.summary, /in the last 2 runs/);
+});
+
+test('a run that timed out, or failed to start, is a failed run', async () => {
+  for (const conclusion of ['timed_out', 'startup_failure']) {
+    const {output} = await go(world({runs: [run(2, conclusion, 2, {jobs: [job(20, FAIL(1))]}), run(1, 'success', 1)]}), {});
+    assert.strictEqual(output.run.id, '2', conclusion);
+    assert.strictEqual(output.coverage.failedRuns, 1, conclusion);
+  }
+});
+
+test('two writers at once lose nothing: a write overtaken by another is merged again', () => {
+  const {writeCache, readCache} = require('../lib/cache');
+  const root = tmp();
+  const real = fs.renameSync;
+  let overtaken = false;
+  fs.renameSync = (a, b) => {
+    real(a, b);
+    if (!overtaken && String(b).endsWith('fingerprints.json')) {
+      overtaken = true; // another launcher's write lands right after ours, without our entry
+      fs.writeFileSync(b, JSON.stringify({version: 1, runs: {other: {signature: 'b'.repeat(64)}}}));
+    }
+  };
+  try {
+    assert.strictEqual(writeCache('acme/widgets', {mine: {signature: 'a'.repeat(64)}}, root), true);
+  } finally {
+    fs.renameSync = real;
+  }
+  assert.deepStrictEqual(Object.keys(readCache('acme/widgets', root).runs).sort(), ['mine', 'other']);
 });
