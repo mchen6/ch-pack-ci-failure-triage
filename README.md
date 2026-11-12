@@ -100,7 +100,8 @@ npm test
 npm run validate   # packs the module and runs countinghouse-validate on the tarball
 ```
 
-Pure JavaScript, Node 22.16 or later, no native module. CI runs on
+Pure JavaScript, no native module. Node 24 or later today (the runtime's
+floor); 22.16 once countinghouse's floor shim lands (design). CI runs on
 Linux, macOS and Windows.
 
 ## Publishing
