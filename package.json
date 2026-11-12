@@ -1,0 +1,25 @@
+{
+  "name": "@countinghouse/ch-pack-ci-failure-triage",
+  "version": "0.0.1",
+  "description": "countinghouse scenario: one call answers \"why did CI fail?\" with the failing step, the error lines, the cross-run history and a measured receipt of what was read and what reached the model.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mchen6/ch-pack-ci-failure-triage.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.16"
+  },
+  "files": [
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node -e \"const p=require('./package.json'); if (!/^@countinghouse\\/ch-/.test(p.name)) process.exit(1)\""
+  },
+  "countinghouse": {
+    "role": "scenario"
+  }
+}
