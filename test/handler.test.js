@@ -7,7 +7,7 @@ const path = require('node:path');
 require('./support');
 const {makeCtx} = require('./fake-ctx');
 const {world, runnerLog} = require('./github');
-const triage = require('../handlers/triageService/triage');
+const triage = require('../handlers/triageService/ci_failure_triage');
 const {resolveRepo} = require('../lib/repo');
 
 const ROOT = path.join(__dirname, '..');

@@ -1,5 +1,5 @@
 'use strict';
-// ch-pack-ci-failure-triage/triageService.triage, run end to end in-process:
+// ch-pack-ci-failure-triage/triageService.ci_failure_triage, run end to end in-process:
 // the real parts from their tarballs, GitHub as recorded or as a small world.
 const test = require('node:test');
 const assert = require('node:assert');

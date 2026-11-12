@@ -1,5 +1,6 @@
 'use strict';
-// ch-pack-ci-failure-triage/triageService.triage: the tool ci_failure_triage.
+// ch-pack-ci-failure-triage/triageService.ci_failure_triage: the tool ci_failure_triage
+// (a scenario's action is listed under its bare name; countinghouse LM1).
 const {triage} = require('../../lib/chain');
 const {resolveRepo} = require('../../lib/repo');
 

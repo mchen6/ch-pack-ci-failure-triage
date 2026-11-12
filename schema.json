@@ -3,7 +3,7 @@
   "$id": "#/",
   "type": "object",
   "triageService": {
-    "triage": {
+    "ci_failure_triage": {
       "input": {
         "type": "object",
         "properties": {
@@ -40,7 +40,8 @@
         "additionalProperties": false
       },
       "output": {
-        "anyOf": [
+        "type": "object",
+        "oneOf": [
           {
             "type": "object",
             "properties": {
@@ -422,7 +423,7 @@
   },
   "fault": {
     "triageService": {
-      "triage": {
+      "ci_failure_triage": {
         "fault": {
           "type": "object",
           "properties": {
