@@ -90,7 +90,8 @@ The summary ends with the gaps when there are any.
 `dependencies`. The tests use each part's tarball, recorded in
 [test/fixtures/parts](test/fixtures/parts/README.md).
 
-Each package has its own repository; the family's design, plan and acceptance tests are in a repository that stays private until the first release.
+Each package has its own repository; the family's design, plan and acceptance
+tests are in [ch-packs](https://github.com/mchen6/ch-packs) (public).
 
 ## Development
 
