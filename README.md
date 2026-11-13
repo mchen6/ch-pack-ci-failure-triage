@@ -44,7 +44,7 @@ two shapes). The triage result has exactly these fields:
 - **`owner_hint`:** `{logins, why}`, at most three GitHub logins with one
   reason each, or `null`.
 - **`coverage`:** `{runsListed, failedRuns, logsFetched, logsExpired,
-  logsTruncated, logsUnavailable, cacheHits, capHit}`.
+  logsTruncated, logsUnavailable, cacheHits, capHit, historyRebuilt}`.
   - `logsUnavailable` is a list of `{runId, job}`.
 
 When no run in the window failed, the answer has exactly `{status:
@@ -67,7 +67,9 @@ never sets the receipt.
   unavailable for another reason, by run and job. An older run that cannot
   be read is counted here, never fatal;
 - cache hits;
-- whether the `max_logs` cap stopped it.
+- whether the `max_logs` cap stopped it;
+- whether the history was rebuilt, because the cache was made with another
+  failure-signature algorithm.
 
 The summary ends with the gaps when there are any.
 
@@ -84,6 +86,11 @@ The summary ends with the gaps when there are any.
   A second call fetches only the failed runs it has not seen, plus the latest
   one for its error lines. When that one's log can no longer be read, its
   cached signature still gives the history.
+- Each cached run records the failure-signature algorithm that signed it, as
+  ch-step-failure-signature names it. A run signed by another algorithm, or
+  cached before the field, would never match, so it is read again within
+  `max_logs`; `historyRebuilt` is then true, and the summary says so. Expired
+  logs stay remembered, whatever the algorithm.
 
 **The parts** are named in `countinghouse.calls`: ch-access-github and the seven
 `ch-step-*` modules. The launcher installs them, and this package has no

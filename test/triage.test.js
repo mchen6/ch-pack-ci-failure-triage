@@ -34,7 +34,7 @@ test('the latest failed run is triaged end to end, from the recorded server', as
   assert.strictEqual(output.history.count, 1);
   assert.strictEqual(output.history.verdict, 'new');
   assert.match(output.summary, /^Step 'Run functional tests' failed with a new signature, seen only in this run of the last 39 runs\.$/);
-  assert.deepStrictEqual(output.coverage, {runsListed: 39, failedRuns: 1, logsFetched: 1, logsExpired: 0, logsTruncated: 0, logsUnavailable: [], cacheHits: 0, capHit: false});
+  assert.deepStrictEqual(output.coverage, {runsListed: 39, failedRuns: 1, logsFetched: 1, logsExpired: 0, logsTruncated: 0, logsUnavailable: [], cacheHits: 0, capHit: false, historyRebuilt: false});
   // The recorded logs are synthetic (no raw line is kept), so they hold no error line;
   // the world below triages real-looking failures.
   assert.deepStrictEqual(output.errors, []);
@@ -234,4 +234,99 @@ test('two writers at once lose nothing: a write overtaken by another is merged a
     fs.renameSync = real;
   }
   assert.deepStrictEqual(Object.keys(readCache('acme/widgets', root).runs).sort(), ['mine', 'other']);
+});
+
+// Cache-gap part 3: each cached run records the failure-signature algorithm
+// that signed it (ch-step-failure-signature's `algorithm`). A run signed by
+// another algorithm, or cached before the field, would never match the current
+// signatures, so it is read again within max_logs, and coverage says the
+// history was rebuilt. Expired-log markers do not depend on the algorithm and
+// are kept. The algorithm comes from the target's own sign output; only when
+// that log cannot be signed is an empty probe signed for it.
+const cacheFile = (root) => path.join(root, 'acme__widgets', 'fingerprints.json');
+const THREE = () => [run(5, 'failure', 5, {jobs: [job(50, FAIL(1))]}), run(4, 'failure', 4, {jobs: [job(40, FAIL(2))]}), run(3, 'failure', 3, {jobs: [job(30, FAIL(3))]}), run(2, 'success', 2)];
+const rewriteCache = (root, fn) => { const c = JSON.parse(fs.readFileSync(cacheFile(root), 'utf8')); fn(c); fs.writeFileSync(cacheFile(root), JSON.stringify(c)); };
+const signCalls = (ctx) => ctx.calls.filter((a) => /failure-signature\//.test(a)).length;
+
+test('each cached run records the algorithm that signed it; the same algorithm keeps the cache', async () => {
+  const first = await go(world({runs: THREE()}), {});
+  assert.strictEqual(first.output.coverage.historyRebuilt, false, 'a first call rebuilds nothing');
+  assert.strictEqual(signCalls(first.ctx), 3, 'no probe: the target\'s own sign output names the algorithm');
+  const cache = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
+  assert.deepStrictEqual(Object.values(cache.runs).map((r) => r.algorithm), ['fs1', 'fs1', 'fs1']);
+  const again = world({runs: THREE()});
+  const second = await go(again, {}, first.dataRoot);
+  assert.strictEqual(again.logsFetched(), 1, 'only the latest failed run, for its error lines');
+  assert.strictEqual(second.output.coverage.cacheHits, 2);
+  assert.strictEqual(second.output.coverage.historyRebuilt, false);
+  assert.ok(!/history rebuilt/.test(second.output.summary));
+});
+
+for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0'; }], ['no algorithm (cached before the field)', (r) => { delete r.algorithm; }]]) {
+  test(`runs cached with ${why} are read again, and coverage says the history was rebuilt`, async () => {
+    const first = await go(world({runs: THREE()}), {});
+    rewriteCache(first.dataRoot, (c) => { for (const r of Object.values(c.runs)) { set(r); r.signature = 'stale-signature'; } });
+    const again = world({runs: THREE()});
+    const second = await go(again, {}, first.dataRoot);
+    assert.strictEqual(again.logsFetched(), 3, 'every failed run read again');
+    assert.strictEqual(second.output.coverage.cacheHits, 0);
+    assert.strictEqual(second.output.coverage.historyRebuilt, true);
+    assert.strictEqual(second.output.history.count, 3, 'the history from the current signatures');
+    assert.match(second.output.summary, /; history rebuilt \(the failure signature changed\)/);
+    const rewritten = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
+    assert.ok(!JSON.stringify(rewritten).includes('stale-signature'), 'every one rewritten with the current algorithm');
+    assert.deepStrictEqual(Object.values(rewritten.runs).map((r) => r.algorithm), ['fs1', 'fs1', 'fs1']);
+  });
+}
+
+test('expired-log markers do not depend on the algorithm: a rebuild does not fetch them again', async () => {
+  const runs = [run(5, 'failure', 5, {jobs: [job(50, FAIL(1))]}), run(4, 'failure', 4, {jobs: [job(40, 'expired')]}), run(3, 'failure', 3, {jobs: [job(30, FAIL(3))]})];
+  const first = await go(world({runs}), {});
+  rewriteCache(first.dataRoot, (c) => { for (const r of Object.values(c.runs)) if (r.expired !== true) r.algorithm = 'fs0'; });
+  const again = world({runs});
+  const second = await go(again, {}, first.dataRoot);
+  assert.strictEqual(again.logsFetched(), 2, 'the two signed runs, not the expired one');
+  assert.strictEqual(second.output.coverage.historyRebuilt, true);
+  assert.strictEqual(second.output.coverage.logsExpired, 1);
+});
+
+test('a rebuild stays within max_logs: the rest is the cap, as ever', async () => {
+  const first = await go(world({runs: THREE()}), {});
+  rewriteCache(first.dataRoot, (c) => { for (const r of Object.values(c.runs)) r.algorithm = 'fs0'; });
+  const second = await go(world({runs: THREE()}), {maxLogs: 2}, first.dataRoot);
+  assert.strictEqual(second.output.coverage.logsFetched, 2);
+  assert.strictEqual(second.output.coverage.capHit, true);
+  assert.strictEqual(second.output.coverage.historyRebuilt, true);
+});
+
+test('when the target\'s log cannot be signed, the algorithm comes from a probe; a probe that fails costs the cache, never the answer', async () => {
+  const runs = [run(5, 'failure', 5, {jobs: [job(50, 'expired')]}), run(4, 'failure', 4, {jobs: [job(40, FAIL(2))]})];
+  const first = await go(world({runs}), {});
+  assert.strictEqual(signCalls(first.ctx), 2, 'one real run signed, and the probe for the expired target');
+  const ctx = makeCtx(world({runs}));
+  const real = ctx.call;
+  ctx.call = async (address, input) => {
+    if (/failure-signature\//.test(address) && Array.isArray(input.lines) && input.lines.length === 0) throw new Error('probe refused');
+    return real(address, input);
+  };
+  const output = await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: true}, ctx, {dataRoot: first.dataRoot});
+  assert.ok(output.coverage != null, 'still an answer');
+  assert.strictEqual(output.coverage.historyRebuilt, false, 'an unknown algorithm is not a changed one');
+});
+
+test('an older signature step that names no algorithm keeps the cache it made, as before', async () => {
+  const strip = (ctx) => { const real = ctx.call; ctx.call = async (a, i) => { const r = await real(a, i); if (/failure-signature\//.test(a)) delete r.output.algorithm; return r; }; return ctx; };
+  const dataRoot = tmp();
+  const runOld = (w) => triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: true}, strip(makeCtx(w)), {dataRoot});
+  await runOld(world({runs: THREE()}));
+  const again = world({runs: THREE()});
+  const second = await runOld(again);
+  assert.strictEqual(again.logsFetched(), 1);
+  assert.strictEqual(second.coverage.cacheHits, 2);
+  assert.strictEqual(second.coverage.historyRebuilt, false);
+});
+
+test('no failed run: coverage still states historyRebuilt, false', async () => {
+  const {output} = await go(world({runs: [run(2, 'success', 2)]}), {});
+  assert.strictEqual(output.coverage.historyRebuilt, false);
 });

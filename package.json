@@ -1,6 +1,6 @@
 {
   "name": "@countinghouse/ch-pack-ci-failure-triage",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "countinghouse scenario: one call answers \"why did CI fail?\" with the failing step, the error lines, the cross-run history and a measured receipt of what was read and what reached the model.",
   "license": "Apache-2.0",
   "repository": {
@@ -42,11 +42,11 @@
   "devDependencies": {
     "@countinghouse/ch-step-log-clean": "file:test/fixtures/parts/countinghouse-ch-step-log-clean-0.1.0.tgz",
     "@countinghouse/ch-step-error-patterns": "file:test/fixtures/parts/countinghouse-ch-step-error-patterns-0.1.0.tgz",
-    "@countinghouse/ch-step-failure-signature": "file:test/fixtures/parts/countinghouse-ch-step-failure-signature-0.1.0.tgz",
+    "@countinghouse/ch-step-failure-signature": "file:test/fixtures/parts/countinghouse-ch-step-failure-signature-0.2.0.tgz",
     "@countinghouse/ch-step-dedupe": "file:test/fixtures/parts/countinghouse-ch-step-dedupe-0.1.0.tgz",
     "@countinghouse/ch-step-owner-hint": "file:test/fixtures/parts/countinghouse-ch-step-owner-hint-0.1.0.tgz",
     "@countinghouse/ch-step-redact": "file:test/fixtures/parts/countinghouse-ch-step-redact-0.1.0.tgz",
-    "@countinghouse/ch-step-report": "file:test/fixtures/parts/countinghouse-ch-step-report-0.2.0.tgz",
+    "@countinghouse/ch-step-report": "file:test/fixtures/parts/countinghouse-ch-step-report-0.3.0.tgz",
     "@countinghouse/ch-access-github": "file:test/fixtures/parts/countinghouse-ch-access-github-0.1.0.tgz",
     "countinghouse": "git+https://github.com/mchen6/countinghouse.git#9e1cdb591f470ea502f060ed70ce244bdab633fe"
   },

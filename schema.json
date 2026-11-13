@@ -267,6 +267,10 @@
                   },
                   "capHit": {
                     "type": "boolean"
+                  },
+                  "historyRebuilt": {
+                    "type": "boolean",
+                    "description": "true when the cache was made with another signature algorithm (or before it recorded one) and the history was read again"
                   }
                 },
                 "required": [
@@ -277,7 +281,8 @@
                   "logsTruncated",
                   "logsUnavailable",
                   "cacheHits",
-                  "capHit"
+                  "capHit",
+                  "historyRebuilt"
                 ],
                 "additionalProperties": false
               }
@@ -394,6 +399,10 @@
                   },
                   "capHit": {
                     "type": "boolean"
+                  },
+                  "historyRebuilt": {
+                    "type": "boolean",
+                    "description": "true when the cache was made with another signature algorithm (or before it recorded one) and the history was read again"
                   }
                 },
                 "required": [
@@ -404,7 +413,8 @@
                   "logsTruncated",
                   "logsUnavailable",
                   "cacheHits",
-                  "capHit"
+                  "capHit",
+                  "historyRebuilt"
                 ],
                 "additionalProperties": false
               }
