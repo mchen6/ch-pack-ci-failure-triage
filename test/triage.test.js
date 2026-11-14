@@ -27,14 +27,16 @@ async function go(github, input, dataRoot = tmp()) {
 test('the latest failed run is triaged end to end, from the recorded server', async () => {
   const gh = recordedServer();
   const {output} = await go(gh, {repo: 'mchen6/countinghouse'});
-  assert.deepStrictEqual(Object.keys(output), ['summary', 'run', 'errors', 'history', 'owner_hint', 'coverage']);
+  assert.deepStrictEqual(Object.keys(output), ['summary', 'run', 'failed_jobs', 'errors', 'history', 'owner_hint', 'coverage']);
   assert.strictEqual(output.run.id, '42775507169');
   assert.strictEqual(output.run.step, 'Run functional tests');
   assert.strictEqual(output.run.workflow, 'CI');
   assert.strictEqual(output.history.count, 1);
   assert.strictEqual(output.history.verdict, 'new');
-  assert.match(output.summary, /^Step 'Run functional tests' failed with a new signature, seen only in this run of the last 39 runs\.$/);
-  assert.deepStrictEqual(output.coverage, {runsListed: 39, failedRuns: 1, logsFetched: 1, logsExpired: 0, logsTruncated: 0, logsUnavailable: [], cacheHits: 0, capHit: false, historyRebuilt: false});
+  // the recorded run failed in three jobs: all listed, all read (0.3.0)
+  assert.match(output.summary, /^3 jobs failed; the pack cannot tell which ones gate the run\. Step 'Run functional tests' failed with a new signature, seen only in this run of the last 39 runs\.$/);
+  assert.strictEqual(output.failed_jobs.length, 3);
+  assert.deepStrictEqual(output.coverage, {runsListed: 39, failedRuns: 1, logsFetched: 3, logsExpired: 0, logsTruncated: 0, logsUnavailable: [], cacheHits: 0, capHit: false, historyRebuilt: false});
   // The recorded logs are synthetic (no raw line is kept), so they hold no error line;
   // the world below triages real-looking failures.
   assert.deepStrictEqual(output.errors, []);
@@ -253,7 +255,7 @@ test('each cached run records the algorithm that signed it; the same algorithm k
   assert.strictEqual(first.output.coverage.historyRebuilt, false, 'a first call rebuilds nothing');
   assert.strictEqual(signCalls(first.ctx), 3, 'no probe: the target\'s own sign output names the algorithm');
   const cache = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
-  assert.deepStrictEqual(Object.values(cache.runs).map((r) => r.algorithm), ['fs1', 'fs1', 'fs1']);
+  assert.deepStrictEqual(Object.values(cache.runs).map((r) => r.algorithm), ['fs1+rules2', 'fs1+rules2', 'fs1+rules2']);
   const again = world({runs: THREE()});
   const second = await go(again, {}, first.dataRoot);
   assert.strictEqual(again.logsFetched(), 1, 'only the latest failed run, for its error lines');
@@ -262,7 +264,10 @@ test('each cached run records the algorithm that signed it; the same algorithm k
   assert.ok(!/history rebuilt/.test(second.output.summary));
 });
 
-for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0'; }], ['no algorithm (cached before the field)', (r) => { delete r.algorithm; }]]) {
+for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0+rules2'; }], ['no algorithm (cached before the field)', (r) => { delete r.algorithm; }],
+  // 0.2.0's cache: the same signature algorithm, made from lines extracted by
+  // error-patterns' rules 1 (its JSON records and repeats not yet noise)
+  ['0.2.0\'s key (the signature algorithm alone, before the extraction rules joined it)', (r) => { r.algorithm = 'fs1'; }]]) {
   test(`runs cached with ${why} are read again, and coverage says the history was rebuilt`, async () => {
     const first = await go(world({runs: THREE()}), {});
     rewriteCache(first.dataRoot, (c) => { for (const r of Object.values(c.runs)) { set(r); r.signature = 'stale-signature'; } });
@@ -275,7 +280,7 @@ for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0'; }]
     assert.match(second.output.summary, /; history rebuilt \(the failure signature changed\)/);
     const rewritten = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
     assert.ok(!JSON.stringify(rewritten).includes('stale-signature'), 'every one rewritten with the current algorithm');
-    assert.deepStrictEqual(Object.values(rewritten.runs).map((r) => r.algorithm), ['fs1', 'fs1', 'fs1']);
+    assert.deepStrictEqual(Object.values(rewritten.runs).map((r) => r.algorithm), ['fs1+rules2', 'fs1+rules2', 'fs1+rules2']);
   });
 }
 
@@ -329,4 +334,68 @@ test('an older signature step that names no algorithm keeps the cache it made, a
 test('no failed run: coverage still states historyRebuilt, false', async () => {
   const {output} = await go(world({runs: [run(2, 'success', 2)]}), {});
   assert.strictEqual(output.coverage.historyRebuilt, false);
+});
+
+// 0.3.0: every failed job of the run (dogfood of run 43497750749, the
+// reviewer, 2026-11-13): listed in GitHub's order with its failing step and
+// first error, with no gating mark, and a summary saying the pack cannot tell.
+const MOCHA_FAIL = runnerLog('Run npm test', [
+  '  27 passing (2m)', '  1 failing', '',
+  '  1) remote 07: usage records for remote calls, and the call id across every hop',
+  '       the call id is carried unchanged …:',
+  "     TypeError: Cannot read properties of null (reading 'usageCall')",
+  '      at Context.<anonymous> (test/remote/07-usage-records.js:212:31)']);
+const WINDOWS = runnerLog('Run stdio tests', [
+  JSON.stringify({name: 'countinghouse', hostname: 'runner', pid: 9612, level: 50, e: "worker exit on error: ENOENT: no such file or directory, realpath 'D:\\a\\lib\\cli-options.js'", msg: '', time: 't'}),
+  JSON.stringify({name: 'countinghouse', hostname: 'runner', pid: 7600, level: 50, e: "worker exit on error: ENOENT: no such file or directory, realpath 'D:\\a\\lib\\cli-options.js'", msg: '', time: 't'}),
+  JSON.stringify({name: 'countinghouse', hostname: 'runner', pid: 7600, level: 30, msg: 'module sandbox: m effective permissions {"fs":[]}', time: 't'})]);
+
+test('every failed job is listed with its step and first error; the test (24) failure surfaces next to a failed Windows job', async () => {
+  const runs = [run(9, 'failure', 9, {jobs: [
+    {id: 91, name: 'stdio (windows-latest)', step: 'Run stdio tests', log: WINDOWS},
+    {id: 92, name: 'test (24)', step: 'Run npm test', log: MOCHA_FAIL},
+    {id: 93, name: 'sandbox-floor (22)', step: 'Run npm test', log: FAIL(1)}]}), run(8, 'success', 8)];
+  const {output} = await go(world({runs}), {});
+  assert.deepStrictEqual(output.failed_jobs.map((j) => j.job), ['stdio (windows-latest)', 'test (24)', 'sandbox-floor (22)']);
+  assert.strictEqual(output.failed_jobs[1].first_error,
+    "1) remote 07: usage records for remote calls, and the call id across every hop -- TypeError: Cannot read properties of null (reading 'usageCall')");
+  assert.strictEqual(output.failed_jobs[0].first_error, "worker exit on error: ENOENT: no such file or directory, realpath 'D:\\a\\lib\\cli-options.js' (2 times)");
+  assert.match(output.failed_jobs[2].first_error, /AssertionError/);
+  assert.ok(output.summary.startsWith('3 jobs failed; the pack cannot tell which ones gate the run. '), output.summary);
+  assert.ok(!JSON.stringify(output.errors).includes('effective permissions'), 'an info record is not an error line');
+  assert.ok(output.errors.some((e) => e.endsWith('(2 times)')), JSON.stringify(output.errors));
+});
+
+test('a failed job\'s first error passes through ch-step-redact', async () => {
+  const secret = `ghp_${'A1b2C3d4E5'.repeat(4)}`;
+  const runs = [run(9, 'failure', 9, {jobs: [job(91, FAIL(1)),
+    {id: 92, name: 'deploy', step: 'Run deploy', log: runnerLog('Run deploy', [`Error: push refused for token ${secret}`])}]})];
+  const {output} = await go(world({runs}), {});
+  assert.ok(!JSON.stringify(output).includes(secret), JSON.stringify(output.failed_jobs));
+  assert.match(output.failed_jobs[1].first_error, /Error: push refused for token <githubToken>/);
+});
+
+test('sign is given only its own fields (its input is closed): no rules, no repeats, no failure numbers', async () => {
+  const runs = [run(9, 'failure', 9, {jobs: [{id: 92, name: 'test (24)', step: 'Run npm test', log: MOCHA_FAIL}]})];
+  const given = [];
+  const github = world({runs});
+  const ctx = makeCtx(github);
+  const call = ctx.call;
+  ctx.call = async (address, input) => {
+    if (/failure-signature\//.test(address)) given.push(input);
+    return call(address, input);
+  };
+  await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: false}, ctx, {dataRoot: tmp()});
+  for (const input of given) {
+    assert.deepStrictEqual(Object.keys(input).sort(), ['failingStep', 'lines', 'truncated']);
+    for (const l of input.lines) assert.deepStrictEqual(Object.keys(l).sort(), ['index', 'kind', 'step', 'text']);
+  }
+  assert.ok(given.length > 0);
+});
+
+test('other jobs\' logs count toward max_logs: past it a job is listed with no first error', async () => {
+  const runs = [run(9, 'failure', 9, {jobs: Array.from({length: 4}, (_, i) => ({id: 90 + i, name: `job ${i}`, step: 'Run npm test', log: FAIL(i + 1)}))})];
+  const {output} = await go(world({runs}), {maxLogs: 2});
+  assert.deepStrictEqual(output.failed_jobs.map((j) => j.first_error != null), [true, true, false, false]);
+  assert.strictEqual(output.coverage.capHit, true);
 });

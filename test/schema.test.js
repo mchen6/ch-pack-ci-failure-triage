@@ -55,7 +55,7 @@ test('the output schema is an object of one of two closed shapes, closed all the
   walk(schema.output, 'output');
   assert.deepStrictEqual(open, []);
   const shapes = schema.output.oneOf.map((s) => Object.keys(s.properties).join(','));
-  assert.deepStrictEqual(shapes, ['summary,run,errors,history,owner_hint,coverage', 'status,summary,lastSuccess,coverage']);
+  assert.deepStrictEqual(shapes, ['summary,run,failed_jobs,errors,history,owner_hint,coverage', 'status,summary,lastSuccess,coverage']);
 });
 
 test('the action is ci_failure_triage, the tool name the model sees', () => {
