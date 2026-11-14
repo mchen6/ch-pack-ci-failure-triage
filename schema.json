@@ -46,9 +46,9 @@
             "type": "object",
             "properties": {
               "summary": {
-                "title": "one sentence",
+                "title": "one sentence, then the receipt sentence (at most 300 characters) when the runtime has ctx.usage()",
                 "type": "string",
-                "maxLength": 500
+                "maxLength": 801
               },
               "run": {
                 "type": "object",

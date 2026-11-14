@@ -33,7 +33,8 @@ the failure reach it.
 
 **What it returns** (declared in `schema.json` as a closed object of one of
 two shapes). The triage result has exactly these fields:
-- **`summary`:** one sentence.
+- **`summary`:** one sentence, then the receipt sentence when the runtime
+  has `ctx.usage()` (below); at most 801 characters.
 - **`run`:** `{id, url, branch, commit, workflow, job, step}`.
 - **`errors`:** at most 40 strings, the error lines of the failing step.
 - **`history`:** `{signature, count, window, verdict, firstSeen, lastSeen,
@@ -53,9 +54,19 @@ url, branch, commit, workflow, createdAt}`, or `null`.
 
 The runtime adds the receipt in the result's `_meta` and as a second text
 block: `_meta['countinghouse/receipt']` is `{calls, linesIn, bytesIn,
-linesOut, bytesOut, servers}`, and the text block is its one sentence. The
-answer above is the result's `structuredContent`, unchanged. This module
-never sets the receipt.
+linesOut, bytesOut, servers}`, and the text block is its one sentence. This
+module never sets a receipt field. The model reads the summary, though, so
+the summary ends with the receipt's sentence, written from `ctx.usage()`
+(the call's counts so far, every part's GitHub calls included), in the
+runtime's own words for what was read:
+
+> Receipt: read 48,210 lines (3.1 MB) in 14 calls to github, about 812,647
+> tokens (estimate, bytes/4); only this answer reached the model.
+
+The sentence is left out when the runtime has no `ctx.usage()`, when it
+answers null or refuses, when it answers anything but counts and a
+one-line sentence, or when the whole would be over 300 characters (the
+summary's declared length allows for the report's 500 and these 300).
 
 **Coverage, stated, never hidden:**
 - runs considered (the failing run's workflow only, so a Pages deploy is not
