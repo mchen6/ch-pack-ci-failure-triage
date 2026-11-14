@@ -1,6 +1,6 @@
 {
   "name": "@countinghouse/ch-pack-ci-failure-triage",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "countinghouse scenario: one call answers \"why did CI fail?\" with the failing step, the error lines, the cross-run history and a measured receipt of what was read and what reached the model.",
   "license": "Apache-2.0",
   "repository": {

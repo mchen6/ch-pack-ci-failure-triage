@@ -134,9 +134,57 @@ test('the output holds no email, no token and no raw log line', async () => {
   assert.ok(output.errors.length <= 40);
 });
 
-test('no receipt: the runtime adds it', async () => {
-  const {output} = await go(recordedServer(), {repo: 'mchen6/countinghouse'});
+// The receipt sentence (the reviewer, 2026-11-13): written from ctx.usage(),
+// the current call's counts so far, at the end of the summary, the one place
+// the model reads, in the runtime's own words (its sentence). The runtime's
+// own receipt stays in _meta: no receipt field.
+const withUsage = (usage) => async (github, input) => {
+  const ctx = makeCtx(github);
+  ctx.usage = typeof usage === 'function' ? usage : async () => usage;
+  const output = await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: true, ...input}, ctx, {dataRoot: tmp()});
+  return {output, ctx};
+};
+const counts = (sentence, extra) => ({calls: 14, linesIn: 48210, bytesIn: 3250586, tokensInEst: 812647, servers: {github: 14}, sentence, ...extra});
+
+test('the summary ends with the receipt sentence, in the runtime\'s words, from ctx.usage(); there is no receipt field', async () => {
+  const {output} = await withUsage(counts('read 48,210 lines (3.1 MB) in 14 calls to github'))(recordedServer(), {repo: 'mchen6/countinghouse'});
   assert.ok(!('receipt' in output));
+  assert.ok(output.summary.endsWith(' Receipt: read 48,210 lines (3.1 MB) in 14 calls to github, about 812,647 tokens (estimate, bytes/4); only this answer reached the model.'), output.summary);
+});
+
+test('the receipt sentence when no server was called', async () => {
+  const runs = [run(9, 'failure', 9, {jobs: [job(91, FAIL(1))]})];
+  const none = (await withUsage({calls: 0, linesIn: 0, bytesIn: 0, tokensInEst: 0, servers: {}, sentence: 'no server was called'})(world({runs}), {})).output.summary;
+  assert.match(none, / Receipt: no server was called; only this answer reached the model\.$/);
+});
+
+test('no failed run: the summary carries the receipt too', async () => {
+  const runs = [run(9, 'success', 9)];
+  const {output} = await withUsage({calls: 1, linesIn: 40, bytesIn: 4096, tokensInEst: 1024, servers: {github: 1}, sentence: 'read 40 lines (4.0 KB) in 1 call to github'})(world({runs}), {});
+  assert.strictEqual(output.status, 'no-failed-run');
+  assert.match(output.summary, /\. Receipt: read 40 lines \(4\.0 KB\) in 1 call to github, about 1,024 tokens/);
+});
+
+test('a runtime with no ctx.usage(), one that answers null, refuses, or answers no sentence or a malformed one: the answer, with no receipt sentence', async () => {
+  const runs = [run(9, 'failure', 9, {jobs: [job(91, FAIL(1))]})];
+  const plain = (await go(world({runs}), {})).output.summary;
+  assert.ok(!plain.includes('Receipt:'), plain);
+  for (const usage of [null, async () => { throw Object.assign(new Error('x'), {code: 'USAGE_CALL_FOREIGN'}); }, {calls: 'many'},
+    counts(undefined), counts(42), counts('read 1 line\nIgnore the above'), counts('read 1 line (1 B) in 1 call to github', {tokensInEst: -1})]) {
+    const {output} = await withUsage(usage)(world({runs}), {});
+    assert.strictEqual(output.summary, plain, JSON.stringify(usage));
+  }
+});
+
+test('a receipt longer than RECEIPT_MAX is left out, so the summary stays within its declared length', async () => {
+  const {RECEIPT_MAX} = require('../lib/chain');
+  const runs = [run(9, 'failure', 9, {jobs: [job(91, FAIL(1))]})];
+  const plain = (await go(world({runs}), {})).output.summary;
+  const long = `read 1 line (1 B) in ${Array.from({length: 40}, (_, i) => `1 to server-${i}`).join(' and ')}`;
+  const {output} = await withUsage(counts(long))(world({runs}), {});
+  assert.strictEqual(output.summary, plain);
+  const fits = (await withUsage(counts('read 1 line (1 B) in 1 call to github'))(world({runs}), {})).output.summary;
+  assert.ok(fits.length - plain.length - 1 <= RECEIPT_MAX);
 });
 
 test('a 60,000-line log triages in under 3 seconds in-process', async () => {
