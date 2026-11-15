@@ -94,6 +94,39 @@ test('the cache makes the second call fetch only new runs', async () => {
   assert.ok(!JSON.stringify(cache).includes('AssertionError'), 'never a raw line in the cache');
 });
 
+// A's per-call profile (countinghouse, 2026-11-15): a warm call read the cache
+// three times and rewrote it. The latest failed run is always fetched again
+// for its error lines, and its entry was written back even when it was
+// unchanged. Through the runtime's file broker, each of those is a round trip.
+test('a warm call whose latest run is unchanged reads the cache once and writes nothing', async () => {
+  const runs = [run(5, 'failure', 5, {jobs: [job(50, FAIL(1))]}), run(4, 'failure', 4, {jobs: [job(40, FAIL(2))]}), run(2, 'success', 2)];
+  const first = await go(world({runs}), {});
+  const ops = {read: 0, write: 0, rename: 0, mkdir: 0};
+  const real = {readFileSync: fs.readFileSync, writeFileSync: fs.writeFileSync, renameSync: fs.renameSync, mkdirSync: fs.mkdirSync};
+  const ours = (p) => String(p).includes('acme__widgets');
+  fs.readFileSync = function(p, ...rest) { if (ours(p)) ops.read++; return real.readFileSync.call(this, p, ...rest); };
+  fs.writeFileSync = function(p, ...rest) { if (ours(p)) ops.write++; return real.writeFileSync.call(this, p, ...rest); };
+  fs.renameSync = function(a, b) { if (ours(b)) ops.rename++; return real.renameSync.call(this, a, b); };
+  fs.mkdirSync = function(p, ...rest) { if (ours(p)) ops.mkdir++; return real.mkdirSync.call(this, p, ...rest); };
+  let second;
+  try {
+    second = await go(world({runs}), {}, first.dataRoot);
+  } finally {
+    Object.assign(fs, real);
+  }
+  assert.strictEqual(second.output.history.count, first.output.history.count);
+  assert.deepStrictEqual(ops, {read: 1, write: 0, rename: 0, mkdir: 0});
+});
+
+test('a warm call whose latest run is new still writes it, merged and read back', async () => {
+  const runs = [run(5, 'failure', 5, {jobs: [job(50, FAIL(1))]}), run(2, 'success', 2)];
+  const first = await go(world({runs}), {});
+  const more = [run(6, 'failure', 6, {jobs: [job(60, FAIL(3))]})].concat(runs);
+  await go(world({runs: more}), {}, first.dataRoot);
+  const cache = JSON.parse(fs.readFileSync(path.join(first.dataRoot, 'acme__widgets', 'fingerprints.json'), 'utf8'));
+  assert.deepStrictEqual(Object.keys(cache.runs).sort(), ['5', '6']);
+});
+
 test('the cap stops fetching and says so', async () => {
   const runs = Array.from({length: 8}, (_, i) => run(10 - i, 'failure', 60 - i, {jobs: [job(100 + i, FAIL(i))]}));
   const gh = world({runs});
