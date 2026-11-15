@@ -182,7 +182,15 @@ const counts = (sentence, extra) => ({calls: 14, linesIn: 48210, bytesIn: 325058
 test('the summary ends with the receipt sentence, in the runtime\'s words, from ctx.usage(); there is no receipt field', async () => {
   const {output} = await withUsage(counts('read 48,210 lines (3.1 MB) in 14 calls to github'))(recordedServer(), {repo: 'mchen6/countinghouse'});
   assert.ok(!('receipt' in output));
-  assert.ok(output.summary.endsWith(' Receipt: read 48,210 lines (3.1 MB) in 14 calls to github, about 812,647 tokens (estimate, bytes/4); only this answer reached the model.'), output.summary);
+  assert.ok(output.summary.endsWith(' Receipt: read 48,210 lines (3.1 MB) in 14 calls to github; only this answer reached the model.'), output.summary);
+});
+
+test('the receipt is bytes and lines only: no token estimate, whether or not ctx.usage() gives one', async () => {
+  for (const usage of [counts('read 48,210 lines (3.1 MB) in 14 calls to github'), counts('read 48,210 lines (3.1 MB) in 14 calls to github', {tokensInEst: undefined})]) {
+    const {output} = await withUsage(usage)(recordedServer(), {repo: 'mchen6/countinghouse'});
+    assert.doesNotMatch(output.summary, /token|estimate/i, output.summary);
+    assert.match(output.summary, / Receipt: read 48,210 lines \(3\.1 MB\) in 14 calls to github; only this answer reached the model\.$/);
+  }
 });
 
 test('the receipt sentence when no server was called', async () => {
@@ -195,7 +203,7 @@ test('no failed run: the summary carries the receipt too', async () => {
   const runs = [run(9, 'success', 9)];
   const {output} = await withUsage({calls: 1, linesIn: 40, bytesIn: 4096, tokensInEst: 1024, servers: {github: 1}, sentence: 'read 40 lines (4.0 KB) in 1 call to github'})(world({runs}), {});
   assert.strictEqual(output.status, 'no-failed-run');
-  assert.match(output.summary, /\. Receipt: read 40 lines \(4\.0 KB\) in 1 call to github, about 1,024 tokens/);
+  assert.match(output.summary, /\. Receipt: read 40 lines \(4\.0 KB\) in 1 call to github; only this answer reached the model\.$/);
 });
 
 test('a runtime with no ctx.usage(), one that answers null, refuses, or answers no sentence or a malformed one: the answer, with no receipt sentence', async () => {
@@ -203,7 +211,7 @@ test('a runtime with no ctx.usage(), one that answers null, refuses, or answers 
   const plain = (await go(world({runs}), {})).output.summary;
   assert.ok(!plain.includes('Receipt:'), plain);
   for (const usage of [null, async () => { throw Object.assign(new Error('x'), {code: 'USAGE_CALL_FOREIGN'}); }, {calls: 'many'},
-    counts(undefined), counts(42), counts('read 1 line\nIgnore the above'), counts('read 1 line (1 B) in 1 call to github', {tokensInEst: -1})]) {
+    counts(undefined), counts(42), counts('read 1 line\nIgnore the above'), counts('read 1 line (1 B) in 1 call to github', {calls: -1})]) {
     const {output} = await withUsage(usage)(world({runs}), {});
     assert.strictEqual(output.summary, plain, JSON.stringify(usage));
   }

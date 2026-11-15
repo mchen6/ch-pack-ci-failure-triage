@@ -60,8 +60,11 @@ the summary ends with the receipt's sentence, written from `ctx.usage()`
 (the call's counts so far, every part's GitHub calls included), in the
 runtime's own words for what was read:
 
-> Receipt: read 48,210 lines (3.1 MB) in 14 calls to github, about 812,647
-> tokens (estimate, bytes/4); only this answer reached the model.
+> Receipt: read 48,210 lines (3.1 MB) in 14 calls to github; only this
+> answer reached the model.
+
+Bytes and lines only. A token estimate is the usage report's
+(`countinghouse_usage_report`), labelled as one there, never the receipt's.
 
 The sentence is left out when the runtime has no `ctx.usage()`, when it
 answers null or refuses, when it answers anything but counts and a
