@@ -10,7 +10,9 @@ const {CountinghouseError} = require('countinghouse/lib/countinghouse-error');
 const PARTS = path.join(__dirname, '..', 'node_modules', '@countinghouse');
 const error = (code, message, details) => CountinghouseError.module(code, message, details);
 
-function makeCtx(github) {
+// settings: the module's effective settings for the call (ctx.settings, frozen
+// as the runtime gives them); settingRequired answers the runtime's claim.
+function makeCtx(github, {settings = {}} = {}) {
   const calls = [];
   const partCtx = {
     error,
@@ -23,6 +25,18 @@ function makeCtx(github) {
   return {
     calls,
     error,
+    settings: Object.freeze({__proto__: null, ...settings}),
+    // as the runtime answers it (lib/handler-ctx.js: SETTING_REQUIRED, the
+    // name as its message), and only as the main thread accepts the claim:
+    // the setting declared by this module and unset in this call's values;
+    // any other claim is a module fault
+    settingRequired: (name) => {
+      const declared = require('../package.json').countinghouse.settings || {};
+      if (!Object.prototype.hasOwnProperty.call(declared, name) || settings[name] != null) {
+        return Object.assign(new Error(`a SETTING_REQUIRED claim for ${name}, which is not declared or is set`), {code: 'DEVICE_INVOKE_EXCEPTION'});
+      }
+      return Object.assign(new CountinghouseError('SETTING_REQUIRED'), {message: name});
+    },
     call: async (address, input) => {
       calls.push(address);
       const m = /^(ch-[a-z-]+)\/(\w+)\.(\w+)$/.exec(address);

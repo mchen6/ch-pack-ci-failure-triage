@@ -20,13 +20,18 @@ the failure reach it.
 
 - **Server:** GitHub, through [ch-access-github](https://github.com/mchen6/ch-access-github),
   which owns the remote. This module declares no remote and never sees a token.
-- **Credentials:** `COUNTINGHOUSE_GITHUB_TOKEN`, or else `GITHUB_TOKEN`: a
-  fine-grained token with Metadata, Contents and Actions read on the
-  repository.
-- **The repository:** the one the agent is working in. The launcher reads its
-  working directory's `origin` remote and passes it as
-  `DeviceConfig.defaultRepo`; `repo: 'owner/name'` overrides it. Without
-  either, the call fails with `REPO_REQUIRED`.
+- **Credentials:** none of its own. The GitHub token is ch-access-github's
+  credential (`ch-local credentials add ch-access-github`): a fine-grained
+  token with Metadata, Contents and Actions read on the repository. Without
+  it ch-access-github does not load, and neither does this module, which
+  calls it.
+- **The repository:** the input's `repo: 'owner/name'`, which the tool's
+  description asks the agent to pass (the project it is working in); else the
+  module's setting `defaultRepo` (a repository, set with `ch-local settings set
+  ch-pack-ci-failure-triage.defaultRepo` or in conversation); else, until it
+  is removed before release, the launcher's `DeviceConfig.defaultRepo`.
+  Without any of them the call fails with the runtime's `SETTING_REQUIRED`,
+  naming `defaultRepo`.
 - **Arguments, all optional:** `run_id` (default: the latest failed run),
   `repo`, `window` (default 50 runs), `max_logs` (default 20 logs per
   call), `owner_hint` (default true; false leaves the logins out).

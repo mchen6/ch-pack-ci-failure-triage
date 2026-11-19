@@ -6,7 +6,6 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-require('./support');
 const Ajv2020 = require('ajv/dist/2020');
 const {makeCtx} = require('./fake-ctx');
 const {recordedServer, world, runnerLog} = require('./github');
