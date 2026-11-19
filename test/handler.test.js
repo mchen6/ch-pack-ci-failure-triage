@@ -1,4 +1,5 @@
 'use strict';
+require('./tmp-dirs');
 // The handler: input, the repository (input, then setting), and the declaration.
 const test = require('node:test');
 const assert = require('node:assert');
