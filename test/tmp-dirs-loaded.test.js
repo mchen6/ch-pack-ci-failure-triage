@@ -16,13 +16,25 @@ test('every test file requires ./tmp-dirs as its second line, before anything el
   assert.deepStrictEqual(missing, [], `'use strict' then require('./tmp-dirs') as the first two lines of: ${missing.join(', ')}`);
 });
 
-test('a ch-* directory a test makes is gone when its process ends', () => {
+test('every ch-* directory a test makes is gone when its process ends, by each mkdtemp; any other is left', async () => {
   const {spawnSync} = require('node:child_process');
   const os = require('node:os');
   const script = `require(${JSON.stringify(path.join(__dirname, 'tmp-dirs.js'))}); const fs = require('node:fs'); const path = require('node:path'); const os = require('node:os');
-    process.stdout.write(fs.mkdtempSync(path.join(os.tmpdir(), 'ch-tmp-dirs-check-')));`;
+    const t = os.tmpdir();
+    (async () => {
+      const made = [fs.mkdtempSync(path.join(t, 'ch-tmp-dirs-sync-')), fs.mkdtempSync(path.join(fs.realpathSync(t), 'ch-tmp-dirs-real-')),
+        await new Promise((res, rej) => fs.mkdtemp(path.join(t, 'ch-tmp-dirs-cb-'), (e, d) => (e ? rej(e) : res(d)))),
+        await fs.promises.mkdtemp(path.join(t, 'ch-tmp-dirs-promise-'))];
+      const other = fs.mkdtempSync(path.join(t, 'not-ch-tmp-dirs-'));
+      process.stdout.write(JSON.stringify({made, other}));
+    })();`;
   const r = spawnSync(process.execPath, ['-e', script], {encoding: 'utf8'});
   assert.strictEqual(r.status, 0, r.stderr);
-  assert.ok(r.stdout.startsWith(path.join(os.tmpdir(), 'ch-tmp-dirs-check-')), r.stdout);
-  assert.ok(!fs.existsSync(r.stdout), `${r.stdout} left behind`);
+  const {made, other} = JSON.parse(r.stdout);
+  for (const d of made) assert.ok(!fs.existsSync(d), `${d} left behind`);
+  try {
+    assert.ok(fs.existsSync(other), 'a directory not named ch-* is not ours');
+  } finally {
+    fs.rmSync(other, {recursive: true, force: true});
+  }
 });
