@@ -1,4 +1,5 @@
 'use strict';
+require('./tmp-dirs');
 // The outputs the chain produces match schema.json, checked with the runtime's
 // own validator library (Ajv, 2020-12), as the runtime checks them at the boundary.
 const test = require('node:test');
