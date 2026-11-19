@@ -90,11 +90,12 @@ test('the handler validates its input', async () => {
 // countinghouse's logger step 1 removed the DeviceError and CHError globals:
 // a module's own failure is ctx.error with its own code.
 test('no handler or lib file reaches for an error global the runtime no longer gives', () => {
-  const files = ['handlers/triageService', 'lib'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).map((f) => path.join(ROOT, d, f)));
-  for (const file of files) {
-    const src = fs.readFileSync(file, 'utf8');
-    assert.ok(!/new (DeviceError|CHError)\b|\b(DeviceError|CHError)\(/.test(src), `${path.relative(ROOT, file)} uses a removed error global`);
-  }
+  const walk = (dir) => fs.readdirSync(dir, {withFileTypes: true}).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []));
+  const files = ['handlers', 'lib'].flatMap((d) => walk(path.join(ROOT, d)));
+  assert.ok(files.length > 0);
+  // any mention in code (comments aside): new, a call, instanceof, globalThis
+  const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  for (const file of files) assert.ok(!/\b(DeviceError|CHError)\b/.test(code(fs.readFileSync(file, 'utf8'))), `${path.relative(ROOT, file)} uses a removed error global`);
 });
 
 test('a run_id not among the listed runs is RUN_NOT_FOUND', async () => {
