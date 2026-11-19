@@ -94,6 +94,28 @@ test('no handler or lib file reaches for an error global the runtime no longer g
   for (const file of files) assert.ok(!/\b(DeviceError|CHError|DeviceConfig)\b/.test(code(fs.readFileSync(file, 'utf8'))), `${path.relative(ROOT, file)} uses a removed error global or the device config`);
 });
 
+// The parts as this pack's fixtures hold them answer a bad input with their
+// own INPUT_REJECTED through ctx.error (a module's own error), never a
+// ReferenceError for the removed DeviceError global (the parts' own PRs;
+// refreshed fixtures). Each case breaks one check only.
+test('each part refuses a bad input with its own INPUT_REJECTED', async () => {
+  const {CountinghouseError} = require('countinghouse/lib/countinghouse-error');
+  const ctx = makeCtx(() => { throw new Error('no call'); });
+  const bad = {
+    'ch-step-log-clean/cleanService.clean': {text: 1},
+    'ch-step-error-patterns/patternService.extract': {steps: 'x'},
+    'ch-step-failure-signature/signatureService.sign': {lines: 'x'},
+    'ch-step-dedupe/dedupeService.group': {runs: 'x', window: 5},
+    'ch-step-owner-hint/ownerService.hint': {firstSeen: 'x'},
+    'ch-step-redact/redactService.redact': {lines: 'x'},
+    'ch-step-report/reportService.assemble': {},
+    'ch-access-github/githubService.listRuns': {repo: 'nope', limit: 5}
+  };
+  for (const [address, input] of Object.entries(bad)) {
+    await assert.rejects(ctx.call(address, input), (err) => err instanceof CountinghouseError && err.origin === 'module' && err.code === 'INPUT_REJECTED', address);
+  }
+});
+
 test('a run_id not among the listed runs is RUN_NOT_FOUND', async () => {
   const gh = world({runs: [{id: 1, conclusion: 'failure', at: '2026-11-10T00:00:00Z', jobs: [{id: 10, name: 't', step: 'Run x', log: runnerLog('Run x', ['boom'])}]}]});
   await assert.rejects(triage({repo: 'acme/widgets', run_id: '999'}, makeCtx(gh)), (err) => err.code === 'RUN_NOT_FOUND');
