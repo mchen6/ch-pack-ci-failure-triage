@@ -38,7 +38,7 @@ const withConfig = async (config, f) => {
 
 test('with no repo, no setting and no device config, the defaultRepo setting is asked for', async () => {
   await withConfig(undefined, () => assert.rejects(triage({}, makeCtx(() => { throw new Error('no call'); })),
-    (err) => err.code === 'SETTING_REQUIRED' && err.setting === 'defaultRepo'));
+    (err) => err.code === 'SETTING_REQUIRED' && err.message === 'defaultRepo'));
 });
 
 test('the defaultRepo setting is used when no repo is given, before the device config', async () => {
