@@ -19,7 +19,7 @@ module.exports = async (input, ctx) => {
   if (i.max_logs !== undefined && !intIn(i.max_logs, 1, 50)) throw invalid(ctx, 'max_logs must be an integer from 1 to 50');
   if (i.owner_hint !== undefined && typeof i.owner_hint !== 'boolean') throw invalid(ctx, 'owner_hint must be true or false');
   if (i.repo !== undefined && !isRepo(i.repo)) throw invalid(ctx, 'repo must be "owner/name"');
-  const repo = resolveRepo(i, ctx.settings, typeof DeviceConfig === 'undefined' ? null : DeviceConfig);
+  const repo = resolveRepo(i, ctx.settings);
   // none: the runtime asks for the setting, in its own words (SETTING_REQUIRED)
   if (repo == null) throw ctx.settingRequired('defaultRepo');
   const output = await triage({repo, runId: i.run_id, window: i.window === undefined ? 50 : i.window, maxLogs: i.max_logs === undefined ? 20 : i.max_logs, ownerHint: i.owner_hint !== false}, ctx);

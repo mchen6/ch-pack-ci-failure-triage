@@ -1,5 +1,5 @@
 'use strict';
-// The handler: input, the repository (input, setting, device config), and the declaration.
+// The handler: input, the repository (input, then setting), and the declaration.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -15,15 +15,14 @@ const os = require('node:os');
 require('../lib/cache').config.root = fs.mkdtempSync(path.join(os.tmpdir(), 'ch-triage-data-'));
 const pkg = require('../package.json');
 
-// #413 rev 3 (P1): the repository is the input's repo, else the module's own
-// setting defaultRepo, else (until P3 removes it) the device config the
-// launcher writes, else the setting is asked for: SETTING_REQUIRED.
-test('the repository: input.repo, else the defaultRepo setting, else DeviceConfig.defaultRepo, else none', () => {
-  assert.strictEqual(resolveRepo({repo: 'a/b'}, {defaultRepo: 'e/f'}, {defaultRepo: 'c/d'}), 'a/b');
-  assert.strictEqual(resolveRepo({}, {defaultRepo: 'e/f'}, {defaultRepo: 'c/d'}), 'e/f');
-  assert.strictEqual(resolveRepo({}, {}, {defaultRepo: 'c/d'}), 'c/d');
-  assert.strictEqual(resolveRepo({}, {}, null), null);
-  assert.strictEqual(resolveRepo({}, {defaultRepo: 'not a repo'}, {defaultRepo: 'not a repo'}), null);
+// #413 rev 3 (P1, P3): the repository is the input's repo, else the module's
+// own setting defaultRepo, else the setting is asked for: SETTING_REQUIRED.
+// No path only pack 1 has: the launcher's device config is never read (P3).
+test('the repository: input.repo, else the defaultRepo setting, else none', () => {
+  assert.strictEqual(resolveRepo({repo: 'a/b'}, {defaultRepo: 'e/f'}), 'a/b');
+  assert.strictEqual(resolveRepo({}, {defaultRepo: 'e/f'}), 'e/f');
+  assert.strictEqual(resolveRepo({}, {}), null);
+  assert.strictEqual(resolveRepo({}, {defaultRepo: 'not a repo'}), null);
 });
 
 // the runtime's `repo` format (countinghouse lib/module-settings.js), so the
@@ -58,12 +57,14 @@ test('the defaultRepo setting is used when no repo is given, before the device c
   });
 });
 
-test('DeviceConfig.defaultRepo is still read when neither is given (until P3)', async () => {
-  await withConfig({defaultRepo: 'acme/widgets'}, async () => {
-    const gh = world({runs: [{id: 1, conclusion: 'success', at: '2026-11-10T00:00:00Z'}]});
-    await triage({}, makeCtx(gh));
-    assert.strictEqual(gh.seen[0].args.owner, 'acme');
-  });
+test('a device config is never read: with neither repo nor setting, the setting is asked for (P3)', async () => {
+  await withConfig({defaultRepo: 'acme/widgets'}, () => assert.rejects(triage({}, makeCtx(() => { throw new Error('no call'); })),
+    (err) => err.code === 'SETTING_REQUIRED' && err.message === 'defaultRepo'));
+  const walk = (dir) => fs.readdirSync(dir, {withFileTypes: true}).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []));
+  const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+  for (const file of ['handlers', 'lib'].flatMap((d) => walk(path.join(ROOT, d)))) {
+    assert.ok(!/\bDeviceConfig\b/.test(code(fs.readFileSync(file, 'utf8'))), `${path.relative(ROOT, file)} reads DeviceConfig`);
+  }
 });
 
 test('the module declares defaultRepo, a repository, with no default and not required', () => {
@@ -121,13 +122,7 @@ test('the scenario declares every address it calls, each an action of the part i
   const gh = world({runs: [{id: 2, conclusion: 'failure', at: '2026-11-10T00:02:00Z', jobs: [{id: 20, name: 't', step: 'Run x', log: runnerLog('Run x', ['Error: boom'])}]},
     {id: 1, conclusion: 'failure', at: '2026-11-10T00:01:00Z', jobs: [{id: 10, name: 't', step: 'Run x', log: runnerLog('Run x', ['Error: boom'])}]}]});
   const ctx = makeCtx(gh);
-  const saved = global.DeviceConfig;
-  try {
-    global.DeviceConfig = {defaultRepo: 'acme/widgets'};
-    await triage({}, ctx);
-  } finally {
-    global.DeviceConfig = saved;
-  }
+  await triage({repo: 'acme/widgets'}, ctx);
   for (const address of new Set(ctx.calls)) assert.ok(calls.includes(address), `undeclared: ${address}`);
   assert.deepStrictEqual([...new Set(ctx.calls)].sort(), [...calls].sort(), 'and every declared address is used');
 });
