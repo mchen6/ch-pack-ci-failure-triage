@@ -1,6 +1,6 @@
 # The parts, as tarballs
 
-The scenario's tests run the real step and access handlers in-process. None of the sibling repositories is on npm yet, so each part is `npm pack` of its repository's `main` at the commit below, used here as a `file:` devDependency. To refresh one: pack the new commit, replace the file, and update its row.
+The scenario's tests run the real step and access handlers in-process. None of the sibling repositories is on npm yet, so each part is `npm pack` of its repository's `main` at the commit below, used here as a `file:` devDependency. To refresh one: `npm pack` the new commit, replace the file, point its `file:` devDependency in package.json at the new file name, run `npm install` so package-lock.json takes its integrity, and update its row.
 
 | Package | Repository at | File | Integrity |
 |---|---|---|---|
