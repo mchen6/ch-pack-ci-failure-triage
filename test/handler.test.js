@@ -7,7 +7,7 @@ const path = require('node:path');
 const {makeCtx} = require('./fake-ctx');
 const {world, runnerLog} = require('./github');
 const triage = require('../handlers/triageService/ci_failure_triage');
-const {resolveRepo} = require('../lib/repo');
+const {resolveRepo, isRepo} = require('../lib/repo');
 
 const ROOT = path.join(__dirname, '..');
 // The handler caches under the module's /data; here, a temporary directory.
@@ -24,6 +24,13 @@ test('the repository: input.repo, else the defaultRepo setting, else DeviceConfi
   assert.strictEqual(resolveRepo({}, {}, {defaultRepo: 'c/d'}), 'c/d');
   assert.strictEqual(resolveRepo({}, {}, null), null);
   assert.strictEqual(resolveRepo({}, {defaultRepo: 'not a repo'}, {defaultRepo: 'not a repo'}), null);
+});
+
+// the runtime's `repo` format (countinghouse lib/module-settings.js), so the
+// input and the setting accept the same repositories
+test('a repository is GitHub\'s grammar, as the runtime\'s repo format checks it', () => {
+  for (const ok of ['a/b', 'acme-co/widgets.js', 'A1/x_y-z', `${'a'.repeat(39)}/r`]) assert.ok(isRepo(ok), ok);
+  for (const bad of ['a--b/c', 'ab-/c', '-ab/c', `${'a'.repeat(40)}/r`, 'a/.', 'a/..', 'a/b/c', 'a', '/b', 'a/', `a/${'r'.repeat(101)}`]) assert.ok(!isRepo(bad), bad);
 });
 
 const withConfig = async (config, f) => {

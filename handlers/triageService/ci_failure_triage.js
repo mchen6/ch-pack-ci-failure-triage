@@ -2,7 +2,7 @@
 // ch-pack-ci-failure-triage/triageService.ci_failure_triage: the tool ci_failure_triage
 // (a scenario's action is listed under its bare name; countinghouse LM1).
 const {triage} = require('../../lib/chain');
-const {resolveRepo} = require('../../lib/repo');
+const {resolveRepo, isRepo} = require('../../lib/repo');
 
 const INPUT = ['run_id', 'repo', 'window', 'max_logs', 'owner_hint'];
 // a check of its own: the module's own code through the runtime's ctx.error
@@ -18,7 +18,7 @@ module.exports = async (input, ctx) => {
   if (i.window !== undefined && !intIn(i.window, 1, 100)) throw invalid(ctx, 'window must be an integer from 1 to 100');
   if (i.max_logs !== undefined && !intIn(i.max_logs, 1, 50)) throw invalid(ctx, 'max_logs must be an integer from 1 to 50');
   if (i.owner_hint !== undefined && typeof i.owner_hint !== 'boolean') throw invalid(ctx, 'owner_hint must be true or false');
-  if (i.repo !== undefined && resolveRepo({repo: i.repo}, null, null) == null) throw invalid(ctx, 'repo must be "owner/name"');
+  if (i.repo !== undefined && !isRepo(i.repo)) throw invalid(ctx, 'repo must be "owner/name"');
   const repo = resolveRepo(i, ctx.settings, typeof DeviceConfig === 'undefined' ? null : DeviceConfig);
   // none: the runtime asks for the setting, in its own words (SETTING_REQUIRED)
   if (repo == null) throw ctx.settingRequired('defaultRepo');
