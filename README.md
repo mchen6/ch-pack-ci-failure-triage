@@ -29,8 +29,7 @@ the failure reach it.
   description asks the agent to pass (the project it is working in); else the
   module's setting `defaultRepo` (a repository, set with `ch-local settings set
   ch-pack-ci-failure-triage.defaultRepo` or in conversation). Without either
-  the call fails with the runtime's `SETTING_REQUIRED`, naming `defaultRepo`,
-  and the agent is told to ask the user.
+  the call fails with the runtime's `SETTING_REQUIRED`, naming `defaultRepo`.
 - **Arguments, all optional:** `run_id` (default: the latest failed run),
   `repo`, `window` (default 50 runs), `max_logs` (default 20 logs per
   call), `owner_hint` (default true; false leaves the logins out).
