@@ -4,7 +4,6 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-require('./support');
 const {makeCtx} = require('./fake-ctx');
 const {world, runnerLog} = require('./github');
 const triage = require('../handlers/triageService/ci_failure_triage');
@@ -50,10 +49,20 @@ test('DeviceConfig.defaultRepo is used when no repo is given', async () => {
 
 test('the handler validates its input', async () => {
   const ctx = makeCtx(() => { throw new Error('no call'); });
-  const invalid = (err) => err.code === 'ARGUMENTS_INVALID';
+  const invalid = (err) => err.code === 'INPUT_REJECTED';
   for (const bad of [{repo: 'nope'}, {repo: 'a/b', run_id: 12}, {repo: 'a/b', run_id: 'x'}, {repo: 'a/b', window: 0}, {repo: 'a/b', window: 101},
     {repo: 'a/b', max_logs: 0}, {repo: 'a/b', max_logs: 51}, {repo: 'a/b', owner_hint: 'no'}, {repo: 'a/b', extra: 1}]) {
     await assert.rejects(triage(bad, ctx), invalid, JSON.stringify(bad));
+  }
+});
+
+// countinghouse's logger step 1 removed the DeviceError and CHError globals:
+// a module's own failure is ctx.error with its own code.
+test('no handler or lib file reaches for an error global the runtime no longer gives', () => {
+  const files = ['handlers/triageService', 'lib'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).map((f) => path.join(ROOT, d, f)));
+  for (const file of files) {
+    const src = fs.readFileSync(file, 'utf8');
+    assert.ok(!/new (DeviceError|CHError)\b|\b(DeviceError|CHError)\(/.test(src), `${path.relative(ROOT, file)} uses a removed error global`);
   }
 });
 
