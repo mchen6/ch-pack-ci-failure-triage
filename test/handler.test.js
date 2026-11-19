@@ -42,12 +42,12 @@ const withConfig = async (config, f) => {
   }
 };
 
-test('with no repo, no setting and no device config, the defaultRepo setting is asked for', async () => {
+test('with neither repo nor setting, the defaultRepo setting is asked for', async () => {
   await withConfig(undefined, () => assert.rejects(triage({}, makeCtx(() => { throw new Error('no call'); })),
     (err) => err.code === 'SETTING_REQUIRED' && err.message === 'defaultRepo'));
 });
 
-test('the defaultRepo setting is used when no repo is given, before the device config', async () => {
+test('the defaultRepo setting is used when no repo is given, and a device config is not', async () => {
   await withConfig({defaultRepo: 'other/place'}, async () => {
     const gh = world({runs: [{id: 1, conclusion: 'success', at: '2026-11-10T00:00:00Z'}]});
     const {output} = await triage({}, makeCtx(gh, {settings: {defaultRepo: 'acme/widgets'}}));
@@ -60,11 +60,6 @@ test('the defaultRepo setting is used when no repo is given, before the device c
 test('a device config is never read: with neither repo nor setting, the setting is asked for (P3)', async () => {
   await withConfig({defaultRepo: 'acme/widgets'}, () => assert.rejects(triage({}, makeCtx(() => { throw new Error('no call'); })),
     (err) => err.code === 'SETTING_REQUIRED' && err.message === 'defaultRepo'));
-  const walk = (dir) => fs.readdirSync(dir, {withFileTypes: true}).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []));
-  const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
-  for (const file of ['handlers', 'lib'].flatMap((d) => walk(path.join(ROOT, d)))) {
-    assert.ok(!/\bDeviceConfig\b/.test(code(fs.readFileSync(file, 'utf8'))), `${path.relative(ROOT, file)} reads DeviceConfig`);
-  }
 });
 
 test('the module declares defaultRepo, a repository, with no default and not required', () => {
@@ -90,13 +85,13 @@ test('the handler validates its input', async () => {
 
 // countinghouse's logger step 1 removed the DeviceError and CHError globals:
 // a module's own failure is ctx.error with its own code.
-test('no handler or lib file reaches for an error global the runtime no longer gives', () => {
+test('no handler or lib file reaches for an error global the runtime no longer gives, or the launcher\'s device config (P3)', () => {
   const walk = (dir) => fs.readdirSync(dir, {withFileTypes: true}).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []));
   const files = ['handlers', 'lib'].flatMap((d) => walk(path.join(ROOT, d)));
   assert.ok(files.length > 0);
   // any mention in code (comments aside): new, a call, instanceof, globalThis
   const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-  for (const file of files) assert.ok(!/\b(DeviceError|CHError)\b/.test(code(fs.readFileSync(file, 'utf8'))), `${path.relative(ROOT, file)} uses a removed error global`);
+  for (const file of files) assert.ok(!/\b(DeviceError|CHError|DeviceConfig)\b/.test(code(fs.readFileSync(file, 'utf8'))), `${path.relative(ROOT, file)} uses a removed error global or the device config`);
 });
 
 test('a run_id not among the listed runs is RUN_NOT_FOUND', async () => {
