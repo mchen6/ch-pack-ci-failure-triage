@@ -10,7 +10,9 @@ const {CountinghouseError} = require('countinghouse/lib/countinghouse-error');
 const PARTS = path.join(__dirname, '..', 'node_modules', '@countinghouse');
 const error = (code, message, details) => CountinghouseError.module(code, message, details);
 
-function makeCtx(github) {
+// settings: the module's effective settings for the call (ctx.settings, frozen
+// as the runtime gives them); settingRequired answers the runtime's claim.
+function makeCtx(github, {settings = {}} = {}) {
   const calls = [];
   const partCtx = {
     error,
@@ -23,6 +25,8 @@ function makeCtx(github) {
   return {
     calls,
     error,
+    settings: Object.freeze({__proto__: null, ...settings}),
+    settingRequired: (name) => Object.assign(new Error(name), {code: 'SETTING_REQUIRED', setting: name}),
     call: async (address, input) => {
       calls.push(address);
       const m = /^(ch-[a-z-]+)\/(\w+)\.(\w+)$/.exec(address);

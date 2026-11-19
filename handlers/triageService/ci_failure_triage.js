@@ -18,9 +18,10 @@ module.exports = async (input, ctx) => {
   if (i.window !== undefined && !intIn(i.window, 1, 100)) throw invalid(ctx, 'window must be an integer from 1 to 100');
   if (i.max_logs !== undefined && !intIn(i.max_logs, 1, 50)) throw invalid(ctx, 'max_logs must be an integer from 1 to 50');
   if (i.owner_hint !== undefined && typeof i.owner_hint !== 'boolean') throw invalid(ctx, 'owner_hint must be true or false');
-  if (i.repo !== undefined && resolveRepo({repo: i.repo}, null) == null) throw invalid(ctx, 'repo must be "owner/name"');
-  const repo = resolveRepo(i, typeof DeviceConfig === 'undefined' ? null : DeviceConfig);
-  if (repo == null) throw ctx.error('REPO_REQUIRED', "pass repo: 'owner/name'; the launcher found no origin remote in its working directory");
+  if (i.repo !== undefined && resolveRepo({repo: i.repo}, null, null) == null) throw invalid(ctx, 'repo must be "owner/name"');
+  const repo = resolveRepo(i, ctx.settings, typeof DeviceConfig === 'undefined' ? null : DeviceConfig);
+  // none: the runtime asks for the setting, in its own words (SETTING_REQUIRED)
+  if (repo == null) throw ctx.settingRequired('defaultRepo');
   const output = await triage({repo, runId: i.run_id, window: i.window === undefined ? 50 : i.window, maxLogs: i.max_logs === undefined ? 20 : i.max_logs, ownerHint: i.owner_hint !== false}, ctx);
   return {output};
 };

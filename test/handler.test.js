@@ -1,5 +1,5 @@
 'use strict';
-// The handler: input, the repository from DeviceConfig, and the declaration.
+// The handler: input, the repository (input, setting, device config), and the declaration.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -15,36 +15,60 @@ const os = require('node:os');
 require('../lib/cache').config.root = fs.mkdtempSync(path.join(os.tmpdir(), 'ch-triage-data-'));
 const pkg = require('../package.json');
 
-test('the repository: input.repo, else DeviceConfig.defaultRepo, else REPO_REQUIRED', () => {
-  assert.strictEqual(resolveRepo({repo: 'a/b'}, {defaultRepo: 'c/d'}), 'a/b');
-  assert.strictEqual(resolveRepo({}, {defaultRepo: 'c/d'}), 'c/d');
-  assert.strictEqual(resolveRepo({}, null), null);
-  assert.strictEqual(resolveRepo({}, {defaultRepo: 'not a repo'}), null);
+// #413 rev 3 (P1): the repository is the input's repo, else the module's own
+// setting defaultRepo, else (until P3 removes it) the device config the
+// launcher writes, else the setting is asked for: SETTING_REQUIRED.
+test('the repository: input.repo, else the defaultRepo setting, else DeviceConfig.defaultRepo, else none', () => {
+  assert.strictEqual(resolveRepo({repo: 'a/b'}, {defaultRepo: 'e/f'}, {defaultRepo: 'c/d'}), 'a/b');
+  assert.strictEqual(resolveRepo({}, {defaultRepo: 'e/f'}, {defaultRepo: 'c/d'}), 'e/f');
+  assert.strictEqual(resolveRepo({}, {}, {defaultRepo: 'c/d'}), 'c/d');
+  assert.strictEqual(resolveRepo({}, {}, null), null);
+  assert.strictEqual(resolveRepo({}, {defaultRepo: 'not a repo'}, {defaultRepo: 'not a repo'}), null);
 });
 
-test('repo is required when there is no default repository', async () => {
+const withConfig = async (config, f) => {
   const saved = global.DeviceConfig;
   try {
-    delete global.DeviceConfig;
-    await assert.rejects(triage({}, makeCtx(() => { throw new Error('no call'); })), (err) => err.code === 'REPO_REQUIRED'
-      && err.message.includes("pass repo: 'owner/name'; the launcher found no origin remote in its working directory"));
+    if (config === undefined) delete global.DeviceConfig; else global.DeviceConfig = config;
+    return await f();
   } finally {
     global.DeviceConfig = saved;
   }
+};
+
+test('with no repo, no setting and no device config, the defaultRepo setting is asked for', async () => {
+  await withConfig(undefined, () => assert.rejects(triage({}, makeCtx(() => { throw new Error('no call'); })),
+    (err) => err.code === 'SETTING_REQUIRED' && err.setting === 'defaultRepo'));
 });
 
-test('DeviceConfig.defaultRepo is used when no repo is given', async () => {
-  const saved = global.DeviceConfig;
-  try {
-    global.DeviceConfig = {defaultRepo: 'acme/widgets'};
+test('the defaultRepo setting is used when no repo is given, before the device config', async () => {
+  await withConfig({defaultRepo: 'other/place'}, async () => {
     const gh = world({runs: [{id: 1, conclusion: 'success', at: '2026-11-10T00:00:00Z'}]});
-    const {output} = await triage({}, makeCtx(gh));
+    const {output} = await triage({}, makeCtx(gh, {settings: {defaultRepo: 'acme/widgets'}}));
     assert.strictEqual(output.status, 'no-failed-run');
-    assert.strictEqual(gh.seen[0].args.repo, 'widgets');
     assert.strictEqual(gh.seen[0].args.owner, 'acme');
-  } finally {
-    global.DeviceConfig = saved;
-  }
+    assert.strictEqual(gh.seen[0].args.repo, 'widgets');
+  });
+});
+
+test('DeviceConfig.defaultRepo is still read when neither is given (until P3)', async () => {
+  await withConfig({defaultRepo: 'acme/widgets'}, async () => {
+    const gh = world({runs: [{id: 1, conclusion: 'success', at: '2026-11-10T00:00:00Z'}]});
+    await triage({}, makeCtx(gh));
+    assert.strictEqual(gh.seen[0].args.owner, 'acme');
+  });
+});
+
+test('the module declares defaultRepo, a repository, with no default and not required', () => {
+  assert.deepStrictEqual(pkg.countinghouse.settings, {
+    defaultRepo: {type: 'string', format: 'repo', title: 'Default repository', description: 'owner/name used when a call names no repository.'}
+  });
+});
+
+test('the tool tells the agent to pass the repository of the project it works in', () => {
+  const api = require('../api.json');
+  const action = Object.values(api.device.serviceList)[0].actionList.find((a) => a.name === 'ci_failure_triage');
+  assert.match(action.description, /Pass repo: 'owner\/name', the repository of the project you are working in/);
 });
 
 test('the handler validates its input', async () => {
