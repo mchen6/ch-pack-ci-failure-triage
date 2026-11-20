@@ -513,5 +513,59 @@
         }
       }
     }
+  },
+  "prompts": {
+    "ci_triage_latest": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string",
+          "description": "the repository, owner/name; empty: the one you are working in",
+          "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ci_triage_run": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "description": "the run id, from the run's URL",
+          "pattern": "^[1-9]\\d{0,15}$"
+        },
+        "repo": {
+          "type": "string",
+          "description": "the repository, owner/name; empty: the one you are working in",
+          "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "additionalProperties": false
+    },
+    "ci_new_or_recurring": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string",
+          "description": "the repository, owner/name; empty: the one you are working in",
+          "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ci_who_touched": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string",
+          "description": "the repository, owner/name; empty: the one you are working in",
+          "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$"
+        }
+      },
+      "additionalProperties": false
+    }
   }
 }

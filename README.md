@@ -109,6 +109,18 @@ The summary ends with the gaps when there are any.
   `max_logs`; `historyRebuilt` is then true, and the summary says so. Expired
   logs stay remembered, whatever the algorithm.
 
+**Example prompts.** The pack declares four prompts (`promptList`), which a
+client such as Claude Code shows as slash commands. Each asks only for what
+`ci_failure_triage` does, and asks for its receipt line as it is:
+
+- `ci_triage_latest`: Triage the latest failed CI run.
+- `ci_triage_run`: Triage a specific CI run (its `run_id`).
+- `ci_new_or_recurring`: Is this CI failure new, flaky or recurring?
+- `ci_who_touched`: Who last touched the failing step?
+
+Each takes an optional `repo` (owner/name); without one the agent uses the
+repository it is working in.
+
 **The parts** are named in `countinghouse.calls`: ch-access-github and the seven
 `ch-step-*` modules. The launcher installs them, and this package has no
 `dependencies`. The tests use each part's tarball, recorded in

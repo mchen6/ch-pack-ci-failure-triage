@@ -21,6 +21,64 @@
           }
         ]
       }
-    }
+    },
+    "promptList": [
+      {
+        "name": "ci_triage_latest",
+        "title": "Triage the latest failed CI run",
+        "description": "Why the latest failed GitHub Actions run failed, and whether the failure is new, flaky or recurring.",
+        "arguments": {
+          "schema": "/prompts/ci_triage_latest"
+        },
+        "messages": [
+          {
+            "role": "user",
+            "text": "Use ci_failure_triage on the latest failed CI run and tell me why it failed: the failing step, the error lines, and whether the failure is new, flaky or recurring. Show its receipt line as it is.\nRepository (owner/name; empty means the one I'm working in): {{repo}}"
+          }
+        ]
+      },
+      {
+        "name": "ci_triage_run",
+        "title": "Triage a specific CI run",
+        "description": "Why one GitHub Actions run failed, by its run id.",
+        "arguments": {
+          "schema": "/prompts/ci_triage_run"
+        },
+        "messages": [
+          {
+            "role": "user",
+            "text": "Use ci_failure_triage on CI run {{run_id}} and tell me why it failed: the failing step, the error lines, and whether the failure is new, flaky or recurring. Show its receipt line as it is.\nRepository (owner/name; empty means the one I'm working in): {{repo}}"
+          }
+        ]
+      },
+      {
+        "name": "ci_new_or_recurring",
+        "title": "Is this CI failure new, flaky or recurring?",
+        "description": "Whether the latest failed run's failure is new, flaky or recurring, and the commit where it first appeared.",
+        "arguments": {
+          "schema": "/prompts/ci_new_or_recurring"
+        },
+        "messages": [
+          {
+            "role": "user",
+            "text": "Use ci_failure_triage on the latest failed CI run and tell me only whether its failure is new, flaky or recurring, and the commit where it first appeared. Show its receipt line as it is.\nRepository (owner/name; empty means the one I'm working in): {{repo}}"
+          }
+        ]
+      },
+      {
+        "name": "ci_who_touched",
+        "title": "Who last touched the failing step?",
+        "description": "The GitHub logins who last touched what failed in the latest failed run.",
+        "arguments": {
+          "schema": "/prompts/ci_who_touched"
+        },
+        "messages": [
+          {
+            "role": "user",
+            "text": "Use ci_failure_triage on the latest failed CI run and tell me which GitHub logins last touched what failed. Show its receipt line as it is.\nRepository (owner/name; empty means the one I'm working in): {{repo}}"
+          }
+        ]
+      }
+    ]
   }
 }
