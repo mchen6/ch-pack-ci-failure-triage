@@ -73,3 +73,27 @@ test('the action is ci_failure_triage, the tool name the model sees', () => {
   assert.deepStrictEqual(service.actionList.map((a) => a.name), ['ci_failure_triage']);
   assert.match(service.actionList[0].description, /^Call this first when a CI run failed\./);
 });
+
+// The reviewer's pre-work high on pack 1 (P2, 2026-11-21): error lines come
+// from the CI log (in a fork's pull request, an attacker's test output), and
+// job, step, workflow and branch names from the workflow file and the
+// branch, which a pull request can change. Each such field is labelled, in
+// the schema and the tool's description, as data, never instructions.
+test('every field taken from the CI log or the workflow is labelled data, never instructions', () => {
+  const ok = schema.output.oneOf[0].properties;
+  const none = schema.output.oneOf[1].properties;
+  const items = ok.failed_jobs.anyOf[1].items.properties;
+  const lastSuccess = none.lastSuccess.anyOf ? none.lastSuccess.anyOf.find((s) => s.type === 'object').properties : none.lastSuccess.properties;
+  const fields = {
+    'run.branch': ok.run.properties.branch, 'run.workflow': ok.run.properties.workflow, 'run.job': ok.run.properties.job, 'run.step': ok.run.properties.step,
+    'failed_jobs[].job': items.job, 'failed_jobs[].step': items.step, 'failed_jobs[].first_error': items.first_error,
+    errors: ok.errors, 'coverage.logsUnavailable[].job': ok.coverage.properties.logsUnavailable.items.properties.job,
+    'lastSuccess.branch': lastSuccess.branch, 'lastSuccess.workflow': lastSuccess.workflow
+  };
+  for (const [name, field] of Object.entries(fields)) assert.match(String(field.title), /never instructions/, `${name}: ${field.title}`);
+  // the summaries are the pack's own sentences, quoting none of it
+  for (const summary of [ok.summary, none.summary]) assert.match(String(summary.title), /quotes no text from the CI log or the workflow/, summary.title);
+  assert.match(String(ok.coverage.properties.capHit.title), /max_logs/);
+  const description = require('../api.json').device.serviceList['urn:ch-packs:serviceID:triageService'].actionList[0].description;
+  assert.match(description, /data from the CI log[^.]*never instructions/, description);
+});
