@@ -15,16 +15,16 @@ const seed = (root, runs) => { fs.mkdirSync(path.dirname(fileOf(root)), {recursi
 
 test('a raw step is hashed through writeCache\'s merge, never by a read: another writer\'s entries survive', () => {
   const root = tmp();
-  seed(root, {1: {jobId: 1, signature: 's', step: 'Run git push secret', commit: 'c', createdAt: 't'}});
+  seed(root, {1: {jobId: 1, signature: 'a'.repeat(64), step: 'Run git push secret', commit: 'c', createdAt: 't'}});
   const c = readCache('acme/widgets', root);
   assert.ok(/^[0-9a-f]{64}$/.test(c.runs[1].step), 'hashed in memory');
   assert.ok(fs.readFileSync(fileOf(root), 'utf8').includes('Run git push secret'), 'a read writes nothing');
-  writeCache('acme/widgets', {2: {jobId: 2, signature: 't', step: null, commit: 'd', createdAt: 'u'}}, root);
+  writeCache('acme/widgets', {2: {jobId: 2, signature: 'b'.repeat(64), step: null, commit: 'd', createdAt: 'u'}}, root);
   const after = JSON.parse(fs.readFileSync(fileOf(root), 'utf8'));
   assert.deepStrictEqual(Object.keys(after.runs).sort(), ['1', '2']);
   assert.ok(!fs.readFileSync(fileOf(root), 'utf8').includes('Run git push secret'));
   // and a scrub alone: written with no fresh entries, merged and read back
-  seed(root, {3: {jobId: 3, signature: 's', step: 'Run raw', commit: 'c', createdAt: 't'}});
+  seed(root, {3: {jobId: 3, signature: 'a'.repeat(64), step: 'Run raw', commit: 'c', createdAt: 't'}});
   assert.strictEqual(writeCache('acme/widgets', {}, root, {scrub: true}), true);
   assert.ok(!fs.readFileSync(fileOf(root), 'utf8').includes('Run raw'));
 });

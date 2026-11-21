@@ -359,7 +359,7 @@ for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0+rule
   ['0.2.0\'s key (the signature algorithm alone, before the extraction rules joined it)', (r) => { r.algorithm = 'fs1'; }]]) {
   test(`runs cached with ${why} are read again, and coverage says the history was rebuilt`, async () => {
     const first = await go(world({runs: THREE()}), {});
-    rewriteCache(first.dataRoot, (c) => { for (const r of Object.values(c.runs)) { set(r); r.signature = 'stale-signature'; } });
+    rewriteCache(first.dataRoot, (c) => { for (const r of Object.values(c.runs)) { set(r); r.signature = '5'.repeat(64); } });
     const again = world({runs: THREE()});
     const second = await go(again, {}, first.dataRoot);
     assert.strictEqual(again.logsFetched(), 3, 'every failed run read again');
@@ -368,7 +368,7 @@ for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0+rule
     assert.strictEqual(second.output.history.count, 3, 'the history from the current signatures');
     assert.match(second.output.summary, /; history rebuilt \(the failure signature changed\)/);
     const rewritten = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
-    assert.ok(!JSON.stringify(rewritten).includes('stale-signature'), 'every one rewritten with the current algorithm');
+    assert.ok(!JSON.stringify(rewritten).includes('5'.repeat(64)), 'every one rewritten with the current algorithm');
     assert.deepStrictEqual(Object.values(rewritten.runs).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules2+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
   });
 }
@@ -821,4 +821,37 @@ test('a cached stand-in for the target is never a non-signature, expired or not'
   const expiredRuns = [run(9, 'failure', 9, {jobs: [job(91, 'expired')]}), run(8, 'failure', 8, {jobs: [job(81, FAIL(1))]})];
   const {output} = await go(world({runs: expiredRuns}), {}, dataRoot);
   assert.ok(!JSON.stringify(output).includes('IGNORE'), JSON.stringify(output.history));
+});
+
+// (the reviewer's high on #18, round 2) a cache entry held to its shape on
+// read -- a deep array anywhere in it made canonical() throw on every call;
+// and the no-failed-run answer's lastSuccess screened as the report screens
+for (const where of ['signature', 'errorLineHashes', 'commit', 'algorithm']) {
+  test(`a cache entry with a deeply nested ${where} is dropped on read: every call answers`, async () => {
+    const dataRoot = tmp();
+    const runs = [run(9, 'failure', 9, {jobs: [job(91, FAIL(1))]}), run(8, 'failure', 8, {jobs: [job(81, FAIL(1))]})];
+    await go(world({runs}), {}, dataRoot);
+    const file = path.join(dataRoot, 'acme__widgets', 'fingerprints.json');
+    const base = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const deep = '['.repeat(4000) + ']'.repeat(4000);
+    fs.writeFileSync(file, JSON.stringify({version: base.version, runs: {8: {...base.runs[8], [where]: '@@D@@'}}}).replace('"@@D@@"', deep));
+    for (let k = 0; k < 2; k++) {
+      const {output} = await go(world({runs}), {}, dataRoot);
+      assert.strictEqual(typeof output.summary, 'string');
+    }
+  });
+}
+
+test('the no-failed-run answer withholds an address or a credential URL in lastSuccess', async () => {
+  for (const workflow of ['Deploy postgres://svc@corp.com:hunter2@db/app', 'https://alice@corp.com@nexus/r', 'notify bob@corp.example']) {
+    const runs = [run(9, 'success', 9, {workflow, branch: 'fix-bob@corp.example'})];
+    const {output} = await go(world({runs}), {});
+    assert.strictEqual(output.status, 'no-failed-run');
+    // (the two credential URLs redact misses are withheld; a plain address
+    // redact already masks as <email>; either way none of it is shown)
+    if (!workflow.startsWith('notify')) assert.strictEqual(output.lastSuccess.workflow, '(withheld: it holds an e-mail address)', workflow);
+    for (const leak of ['hunter2', 'corp.com', 'corp.example']) assert.ok(!JSON.stringify(output).includes(leak), `${leak}: ${JSON.stringify(output.lastSuccess)}`);
+  }
+  const {output} = await go(world({runs: [run(9, 'success', 9, {workflow: 'CI', branch: 'main'})]}), {});
+  assert.deepStrictEqual([output.lastSuccess.workflow, output.lastSuccess.branch], ['CI', 'main']);
 });
