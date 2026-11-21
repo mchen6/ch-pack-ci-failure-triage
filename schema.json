@@ -46,7 +46,7 @@
             "type": "object",
             "properties": {
               "summary": {
-                "title": "one sentence, then the receipt sentence (at most 300 characters) when the runtime has ctx.usage()",
+                "title": "one sentence the pack writes, which quotes no text from the CI log or the workflow (the names are in run and failed_jobs), then the receipt sentence (at most 300 characters) when the runtime has ctx.usage()",
                 "type": "string",
                 "maxLength": 801
               },
@@ -337,6 +337,7 @@
                     "minimum": 0
                   },
                   "capHit": {
+                    "title": "true when a bound stopped the history being read: max_logs logs fetched, or 50 logs unavailable",
                     "type": "boolean"
                   },
                   "historyRebuilt": {
@@ -379,6 +380,7 @@
                 ]
               },
               "summary": {
+                "title": "one sentence the pack writes, which quotes no text from the CI log or the workflow (the names are in lastSuccess)",
                 "type": "string"
               },
               "lastSuccess": {
@@ -472,6 +474,7 @@
                     "minimum": 0
                   },
                   "capHit": {
+                    "title": "true when a bound stopped the history being read: max_logs logs fetched, or 50 logs unavailable",
                     "type": "boolean"
                   },
                   "historyRebuilt": {

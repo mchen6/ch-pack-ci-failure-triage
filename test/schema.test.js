@@ -91,6 +91,9 @@ test('every field taken from the CI log or the workflow is labelled data, never 
     'lastSuccess.branch': lastSuccess.branch, 'lastSuccess.workflow': lastSuccess.workflow
   };
   for (const [name, field] of Object.entries(fields)) assert.match(String(field.title), /never instructions/, `${name}: ${field.title}`);
+  // the summaries are the pack's own sentences, quoting none of it
+  for (const summary of [ok.summary, none.summary]) assert.match(String(summary.title), /quotes no text from the CI log or the workflow/, summary.title);
+  assert.match(String(ok.coverage.properties.capHit.title), /max_logs/);
   const description = require('../api.json').device.serviceList['urn:ch-packs:serviceID:triageService'].actionList[0].description;
   assert.match(description, /data from the CI log[^.]*never instructions/, description);
 });
