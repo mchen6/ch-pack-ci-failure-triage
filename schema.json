@@ -8,17 +8,22 @@
         "type": "object",
         "properties": {
           "run_id": {
-            "title": "a specific run, by id; default: the latest failed run",
-            "type": "string",
-            "pattern": "^[1-9]\\d{0,15}$"
+            "title": "a specific run, by id; default: the latest failed run (digits, as a string or a number)",
+            "type": [
+              "string",
+              "integer"
+            ],
+            "pattern": "^[1-9]\\d{0,15}$",
+            "minimum": 1,
+            "maximum": 9007199254740991
           },
           "repo": {
-            "title": "owner/name; default: the repository the agent is working in",
+            "title": "owner/name; default: the module's defaultRepo setting, else the runtime asks for that setting (SETTING_REQUIRED)",
             "type": "string",
             "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$"
           },
           "window": {
-            "title": "how many recent runs to consider",
+            "title": "how many of the repository's most recent runs to list, of every workflow; the history is the triaged workflow's runs among them",
             "type": "integer",
             "minimum": 1,
             "maximum": 100,
@@ -32,7 +37,7 @@
             "default": 20
           },
           "owner_hint": {
-            "title": "name the GitHub logins who last touched the failure",
+            "title": "name the GitHub logins of the authors of the commits the failure occurred on",
             "type": "boolean",
             "default": true
           }
@@ -264,7 +269,7 @@
                         "items": {
                           "type": "string",
                           "pattern": "^[^@\\s]+$",
-                          "maxLength": 39
+                          "maxLength": 44
                         }
                       },
                       "why": {
@@ -337,7 +342,7 @@
                     "minimum": 0
                   },
                   "capHit": {
-                    "title": "true when a bound stopped the history being read: max_logs logs fetched, or 50 logs unavailable",
+                    "title": "true when a bound stopped a log being read: max_logs logs fetched (the run's own jobs take at most half of them), or 50 logs unavailable",
                     "type": "boolean"
                   },
                   "historyRebuilt": {
@@ -474,7 +479,7 @@
                     "minimum": 0
                   },
                   "capHit": {
-                    "title": "true when a bound stopped the history being read: max_logs logs fetched, or 50 logs unavailable",
+                    "title": "true when a bound stopped a log being read: max_logs logs fetched (the run's own jobs take at most half of them), or 50 logs unavailable",
                     "type": "boolean"
                   },
                   "historyRebuilt": {
@@ -500,6 +505,125 @@
               "status",
               "summary",
               "lastSuccess",
+              "coverage"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "run-not-failed"
+                ]
+              },
+              "summary": {
+                "title": "one sentence the pack writes: the run did not fail, and why (its conclusion, or still in progress)",
+                "type": "string"
+              },
+              "run": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
+                  "conclusion": {
+                    "title": "GitHub's conclusion for the run, or null while it is in progress",
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z_]{1,32}$"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "conclusion"
+                ],
+                "additionalProperties": false
+              },
+              "coverage": {
+                "type": "object",
+                "properties": {
+                  "runsListed": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "failedRuns": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsFetched": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsExpired": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsTruncated": {
+                    "title": "logs the server returned shorter than the log",
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "logsUnavailable": {
+                    "title": "logs that could not be read for another reason, by run and job (the job name redacted)",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "runId": {
+                          "type": "string"
+                        },
+                        "job": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "runId",
+                        "job"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 50
+                  },
+                  "cacheHits": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "capHit": {
+                    "title": "true when a bound stopped a log being read: max_logs logs fetched (the run's own jobs take at most half of them), or 50 logs unavailable",
+                    "type": "boolean"
+                  },
+                  "historyRebuilt": {
+                    "type": "boolean",
+                    "description": "true when the cache was made with another signature algorithm (or before it recorded one) and the history was read again"
+                  }
+                },
+                "required": [
+                  "runsListed",
+                  "failedRuns",
+                  "logsFetched",
+                  "logsExpired",
+                  "logsTruncated",
+                  "logsUnavailable",
+                  "cacheHits",
+                  "capHit",
+                  "historyRebuilt"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "status",
+              "summary",
+              "run",
               "coverage"
             ],
             "additionalProperties": false

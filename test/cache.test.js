@@ -131,3 +131,15 @@ test('with no key to be had, keyed hashes do not wait; a transient open error is
     testHooks.beforeLink = null;
   }
 });
+
+// (the medium on the final-pass PR) a no-jobs entry is exactly {noJobs,
+// conclusion, commit, createdAt}: mixed with a signed entry's fields, dropped
+test('a no-jobs entry mixed with a signed or expired entry\'s fields is dropped', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ch-cache-nj-'));
+  const base = {commit: 'a'.repeat(40), createdAt: '2026-11-10T00:00:00Z'};
+  const runs = {1: {noJobs: true, conclusion: 'failure', ...base}, 2: {noJobs: true, conclusion: 'failure', signature: 'b'.repeat(64), ...base},
+    3: {noJobs: true, conclusion: 'failure', expired: true, jobId: 3, ...base}, 4: {noJobs: true, ...base}};
+  fs.mkdirSync(path.join(root, 'acme__widgets'), {recursive: true});
+  fs.writeFileSync(path.join(root, 'acme__widgets', 'fingerprints.json'), JSON.stringify({version: readCache('acme/widgets', fs.mkdtempSync(path.join(os.tmpdir(), 'ch-cache-v-'))).version, runs}), {mode: 0o600});
+  assert.deepStrictEqual(Object.keys(readCache('acme/widgets', root).runs), ['1']);
+});

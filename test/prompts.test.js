@@ -38,9 +38,9 @@ const EXPECTED = [
   },
   {
     name: 'ci_who_touched',
-    title: 'Who last touched the failing step?',
-    description: 'The GitHub logins who last touched what failed in the latest failed run.',
-    text: 'Use ci_failure_triage on the latest failed CI run and tell me which GitHub logins last touched what failed. Show its receipt line as it is.' + REPO_LINE,
+    title: 'Who wrote the commits the CI failure occurred on?',
+    description: 'The GitHub logins of the authors of the commits the latest failed run\'s failure occurred on.',
+    text: 'Use ci_failure_triage on the latest failed CI run and tell me the GitHub logins of the authors of the commits the failure occurred on. Show its receipt line as it is.' + REPO_LINE,
     required: []
   }
 ];
@@ -97,6 +97,6 @@ test('each prompt\'s arguments are the tool\'s own: repo optional, run_id only w
   }
 });
 
-test('the pack\'s version carries the prompts: 0.6.0', () => {
-  assert.strictEqual(pkg.version, '0.6.0');
+test('the pack\'s version carries the prompts: 0.7.0', () => {
+  assert.strictEqual(pkg.version, '0.7.0');
 });

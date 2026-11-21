@@ -78,7 +78,7 @@ test('the tool tells the agent to pass the repository of the project it works in
 test('the handler validates its input', async () => {
   const ctx = makeCtx(() => { throw new Error('no call'); });
   const invalid = (err) => err.code === 'INPUT_REJECTED';
-  for (const bad of [{repo: 'nope'}, {repo: 'a/b', run_id: 12}, {repo: 'a/b', run_id: 'x'}, {repo: 'a/b', window: 0}, {repo: 'a/b', window: 101},
+  for (const bad of [{repo: 'nope'}, {repo: 'a/b', run_id: 0}, {repo: 'a/b', run_id: 1.5}, {repo: 'a/b', run_id: 'x'}, {repo: 'a/b', window: 0}, {repo: 'a/b', window: 101},
     {repo: 'a/b', max_logs: 0}, {repo: 'a/b', max_logs: 51}, {repo: 'a/b', owner_hint: 'no'}, {repo: 'a/b', extra: 1}]) {
     await assert.rejects(triage(bad, ctx), invalid, JSON.stringify(bad));
   }
@@ -143,4 +143,14 @@ test('the scenario declares every address it calls, each an action of the part i
   await triage({repo: 'acme/widgets'}, ctx);
   for (const address of new Set(ctx.calls)) assert.ok(calls.includes(address), `undeclared: ${address}`);
   assert.deepStrictEqual([...new Set(ctx.calls)].sort(), [...calls].sort(), 'and every declared address is used');
+});
+
+// (the reviewer's final pass on the packs, A12) run_id as a number, as a
+// model often sends it, is taken as the same id
+test('run_id given as a number is accepted', async () => {
+  const ctx = makeCtx(world({runs: [{id: 7, conclusion: 'failure', at: '2026-11-10T07:00:00Z', jobs: [{id: 70, name: 'test', step: 'Run npm test', log: runnerLog('Run npm test', ['Error: boom'])}]}]}));
+  ctx.settings = {defaultRepo: 'acme/widgets'};
+  const {output} = await triage({run_id: 7}, ctx);
+  assert.strictEqual(output.run.id, '7');
+  for (const bad of [0, -1, 1.5, 2 ** 53]) await assert.rejects(triage({run_id: bad}, ctx), (e) => e.code === 'INPUT_REJECTED', String(bad));
 });
