@@ -482,10 +482,12 @@ test('sign is given only its own fields (its input is closed): no rules, no repe
   assert.ok(given.length > 0);
 });
 
+// (the run's own jobs take at most half of max_logs since the final pass,
+// A6: four of max_logs 8 here)
 test('other jobs\' logs count toward max_logs: past it a job is listed with no first error', async () => {
-  const runs = [run(9, 'failure', 9, {jobs: Array.from({length: 4}, (_, i) => ({id: 90 + i, name: `job ${i}`, step: 'Run npm test', log: FAIL(i + 1)}))})];
-  const {output} = await go(world({runs}), {maxLogs: 2});
-  assert.deepStrictEqual(output.failed_jobs.map((j) => j.first_error != null), [true, true, false, false]);
+  const runs = [run(9, 'failure', 9, {jobs: Array.from({length: 6}, (_, i) => ({id: 90 + i, name: `job ${i}`, step: 'Run npm test', log: FAIL(i + 1)}))})];
+  const {output} = await go(world({runs}), {maxLogs: 8});
+  assert.deepStrictEqual(output.failed_jobs.map((j) => j.first_error != null), [true, true, true, true, false, false]);
   assert.strictEqual(output.coverage.capHit, true);
 });
 
@@ -854,4 +856,107 @@ test('the no-failed-run answer withholds an address or a credential URL in lastS
   }
   const {output} = await go(world({runs: [run(9, 'success', 9, {workflow: 'CI', branch: 'main'})]}), {});
   assert.deepStrictEqual([output.lastSuccess.workflow, output.lastSuccess.branch], ['CI', 'main']);
+});
+
+// ---- the reviewer's final pass on the packs (2026-11-21): functional ----
+
+// A2: the owner hint is a suggestion; a login owner-hint refuses (an
+// Enterprise Managed Users login, jdoe_acme) never fails the call
+test('owner-hint refusing a login gives no hint, never a failed call', async () => {
+  const gh = world({runs: [run(9, 'failure', 9, {jobs: [job(90, FAIL(1))]})], commits: {[sha(9)]: 'jdoe_acme'}});
+  const {output} = await go(gh, {});
+  assert.strictEqual(output.owner_hint, null);
+  assert.strictEqual(typeof output.summary, 'string');
+});
+
+// A4: first_error and the order of errors come from the failing step first;
+// an install step's warning is no first error
+const TWO_STEPS = (() => {
+  const at = (i) => `2026-11-10T07:30:${String(i % 60).padStart(2, '0')}.0000000Z `;
+  const body = ['##[group]Run npm ci', 'npm ci', '##[endgroup]', 'npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory',
+    'npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported', 'added 312 packages in 9s',
+    '##[group]Run npm test', 'npm test', '##[endgroup]', '✖ adds two numbers (1.1ms)', '  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: 1 !== 2',
+    '      at TestContext.<anonymous> (/home/runner/work/w/w/test/add.test.js:7:10)', '##[error]Process completed with exit code 1.'];
+  return body.map((l, i) => at(i) + l).join('\n');
+})();
+test('first_error and the first errors are the failing step\'s, not an earlier step\'s warning', async () => {
+  const gh = world({runs: [run(9, 'failure', 9, {jobs: [job(90, TWO_STEPS)]})]});
+  const {output} = await go(gh, {});
+  assert.match(output.failed_jobs[0].first_error, /adds two numbers/, output.failed_jobs[0].first_error);
+  assert.ok(!/npm warn/.test(output.errors[0]), JSON.stringify(output.errors));
+});
+
+// A6: max_logs keeps room for the history: a run of 24 failed jobs no
+// longer spends every log on itself, call after call
+test('a run with many failed jobs leaves half of max_logs to the history, and the summary names the cap', async () => {
+  const jobs = Array.from({length: 24}, (_, k) => job(1000 + k, FAIL(1), {name: `test (${k})`}));
+  const older = [8, 7, 6, 5, 4, 3].map((n) => run(n, 'failure', n, {jobs: [job(n * 10, FAIL(1))]}));
+  const gh = world({runs: [run(9, 'failure', 9, {jobs}), ...older]});
+  const {output} = await go(gh, {});
+  assert.strictEqual(output.history.count, 7, JSON.stringify(output.history));
+  assert.notStrictEqual(output.history.verdict, 'new');
+  assert.strictEqual(output.coverage.capHit, true);
+  assert.ok(output.coverage.logsFetched <= 20, String(output.coverage.logsFetched));
+  assert.match(output.summary, /log cap/);
+});
+
+// A7: a run_id that names a run that did not fail is said so, not triaged
+for (const [conclusion, said] of [['success', /^Run 3 did not fail: its conclusion is success\./], [null, /^Run 3 did not fail: it is still in progress\./], ['cancelled', /^Run 3 did not fail: its conclusion is cancelled\./]]) {
+  test(`run_id naming a run that is ${conclusion || 'in progress'}, with no failed job: said, not triaged`, async () => {
+    const gh = world({runs: [run(4, 'failure', 4, {jobs: [job(40, FAIL(1))]}), run(3, conclusion, 3)]});
+    const {output} = await go(gh, {runId: '3'});
+    assert.strictEqual(output.status, 'run-not-failed');
+    assert.match(output.summary, said);
+    assert.deepStrictEqual(Object.keys(output), ['status', 'summary', 'run', 'coverage']);
+    assert.deepStrictEqual(output.run, {id: '3', conclusion});
+    assert.strictEqual(gh.logsFetched(), 0);
+  });
+}
+test('run_id naming a cancelled run with a failed job: triaged, with its history', async () => {
+  const gh = world({runs: [run(4, 'cancelled', 4, {jobs: [job(40, FAIL(1))]}), run(3, 'failure', 3, {jobs: [job(30, FAIL(1))]})]});
+  const {output} = await go(gh, {runId: '4'});
+  assert.ok(output.history != null, output.summary);
+  assert.strictEqual(output.history.count, 2);
+});
+test('a failed run with no jobs is said to have failed before any job ran', async () => {
+  const gh = world({runs: [run(4, 'failure', 4, {jobs: []}), run(3, 'success', 3)]});
+  const {output} = await go(gh, {});
+  assert.match(output.summary, /failed before any job ran/, output.summary);
+});
+// (s3.js I) a run whose branch GitHub does not name still has its history
+test('a target with no branch still has a history', async () => {
+  const gh = world({runs: [run(9, 'failure', 9, {branch: null, jobs: [job(90, FAIL(1))]}), run(8, 'failure', 8, {jobs: [job(80, FAIL(1))]})]});
+  const {output} = await go(gh, {});
+  assert.ok(output.history != null, output.summary);
+  assert.strictEqual(output.history.count, 2);
+});
+
+// A9: a run that failed, was cached, and then passed on "Re-run jobs" (the
+// same run id, now a success) still counts its failure: the next one is not new
+test('a cached failure that passed on re-run is still counted: the next failure is not new', async () => {
+  const dataRoot = tmp();
+  await go(world({runs: [run(5, 'failure', 5, {jobs: [job(50, FAIL(1))]}), run(4, 'success', 4)]}), {}, dataRoot);
+  const {output} = await go(world({runs: [run(6, 'failure', 6, {jobs: [job(60, FAIL(1))]}), run(5, 'success', 5), run(4, 'success', 4)]}), {}, dataRoot);
+  assert.notStrictEqual(output.history.verdict, 'new', output.summary);
+  assert.deepStrictEqual(output.history.runIds, ['5', '6']);
+});
+
+// A12: a failed run with no jobs is cached: not listed again on every call
+test('a failed run with no jobs is listed once, then cached', async () => {
+  const dataRoot = tmp();
+  const runs = [run(9, 'failure', 9, {jobs: [job(90, FAIL(1))]}), run(8, 'failure', 8, {jobs: []})];
+  await go(world({runs}), {}, dataRoot);
+  const again = world({runs});
+  const {output} = await go(again, {}, dataRoot);
+  const listed = again.seen.filter((s) => s.tool === 'actions_list' && s.args.method === 'list_workflow_jobs').map((s) => s.args.resource_id);
+  assert.deepStrictEqual(listed, ['9']);
+  assert.strictEqual(output.coverage.cacheHits, 1);
+});
+// (the final pass, s3 C2) a login owner-hint passes but the report refuses
+// (a bot login over 39 characters): the hint is dropped, never the call
+test('a hint the report refuses is dropped, never a failed call', async () => {
+  const gh = world({runs: [run(9, 'failure', 9, {jobs: [job(90, FAIL(1))]})], commits: {[sha(9)]: `${'my-organisation-release-automation-app'}[bot]`}});
+  const {output} = await go(gh, {});
+  assert.strictEqual(output.owner_hint, null);
+  assert.strictEqual(typeof output.summary, 'string');
 });

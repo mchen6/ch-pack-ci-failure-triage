@@ -3,15 +3,15 @@
 countinghouse scenario: one call answers "why did CI fail?" with the failing step, the error lines, the cross-run history and a measured receipt of what was read and what reached the model.
 
 **Status: preview.** Runs on [countinghouse](https://github.com/mchen6/countinghouse)
-once it can call a remote MCP server (RC1-min) and load a scenario in local mode
-(LM1); the tests run the whole chain in-process today. A scenario module of the
-countinghouse client packs: the one tool the model sees.
+8.0 or later (unreleased; the release that carries the remote client and
+local mode). A scenario module of the countinghouse client packs: the one tool
+the model sees.
 
 ## What it does
 
-*Design, not yet built: this is what the tool does once countinghouse can
-load it (RC1-min and LM1). The chain is tested in-process here; it has not
-run on a live runtime.*
+The chain is tested in-process here, and end to end on a live runtime by
+[ch-local](https://github.com/mchen6/ch-local)'s acceptance test, against a
+recorded GitHub stand-in.
 
 One tool, `ci_failure_triage`. Chain kind: **carrying: the logs cross the
 runtime, not the model.** One call does what would take the model dozens of
@@ -30,19 +30,30 @@ the failure reach it.
   module's setting `defaultRepo` (a repository, set with `ch-local settings set
   ch-pack-ci-failure-triage.defaultRepo` or in conversation). Without either
   the call fails with the runtime's `SETTING_REQUIRED`, naming `defaultRepo`.
-- **Arguments, all optional:** `run_id` (default: the latest failed run),
+- **Which run:** with no `run_id`, the newest failed run of the repository,
+  in any workflow and on any branch (a `branch` argument is not built yet).
+  A `run_id` naming a run that did not fail (a success, a run still in
+  progress, a cancelled run with no failed job) is answered as such.
+- **Arguments, all optional:** `run_id` (digits, as a string or a number;
+  default: the newest failed run),
   `repo`, `window` (default 50 runs), `max_logs` (default 20 logs per
   call), `owner_hint` (default true; false leaves the logins out).
 
 **What it returns** (declared in `schema.json` as a closed object of one of
-two shapes). The triage result has exactly these fields:
+three shapes). The triage result has exactly these fields:
 - **`summary`:** one sentence, then the receipt sentence when the runtime
   has `ctx.usage()` (below); at most 801 characters.
 - **`run`:** `{id, url, branch, commit, workflow, job, step}`.
-- **`errors`:** at most 40 strings, the error lines of the failing step.
+- **`failed_jobs`:** every failed job of the run (at most 50 listed), each
+  `{job, step, first_error}`; the pack cannot tell which of them gate the
+  run. `first_error` is the failing step's first error line, or `null` when
+  its log was not read.
+- **`errors`:** at most 40 strings, the error lines of the triaged job, the
+  failing step's first.
 - **`history`:** `{signature, count, window, verdict, firstSeen, lastSeen,
   runIds}`, or `null` when the run's log could not be read and the cache does
-  not know it.
+  not know it, or when the run failed before any job ran. A run that failed
+  and then passed on "Re-run jobs" still counts its failure.
   - `firstSeen` and `lastSeen` are `{runId, commit, createdAt}`.
   - `verdict` is `new`, `flaky` or `recurring`.
 - **`owner_hint`:** `{logins, why}`, at most three GitHub logins with one
@@ -53,7 +64,10 @@ two shapes). The triage result has exactly these fields:
 
 When no run in the window failed, the answer has exactly `{status:
 'no-failed-run', summary, lastSuccess, coverage}`. `lastSuccess` is `{id,
-url, branch, commit, workflow, createdAt}`, or `null`.
+url, branch, commit, workflow, createdAt}`, or `null`. When a `run_id`
+names a run that did not fail, it has exactly `{status: 'run-not-failed',
+summary, run, coverage}`, with `run` as `{id, conclusion}` (`conclusion` is
+`null` while the run is in progress).
 
 The runtime adds the receipt in the result's `_meta` and as a second text
 block: `_meta['countinghouse/receipt']` is `{calls, linesIn, bytesIn,
@@ -84,7 +98,9 @@ summary's declared length allows for the report's 500 and these 300).
   unavailable for another reason, by run and job. An older run that cannot
   be read is counted here, never fatal;
 - cache hits;
-- whether the `max_logs` cap stopped it;
+- whether the `max_logs` cap stopped it. The run's own jobs take at most
+  half of `max_logs`, so the history always gets the rest, and a later call
+  reads on from the cache;
 - whether the history was rebuilt, because the cache was made with another
   failure-signature algorithm.
 
@@ -100,9 +116,14 @@ The summary ends with the gaps when there are any.
 - The cache, `/data/<owner>__<name>/fingerprints.json`, holds run ids,
   signatures, commit SHAs, dates and sha256 hashes of the normalised error
   lines, never a raw line or a token, and remembers logs that have expired.
-  A second call fetches only the failed runs it has not seen, plus the latest
-  one for its error lines. When that one's log can no longer be read, its
+  It also remembers failed runs that had no job. A second call fetches only
+  the failed runs it has not seen, plus the latest one for its error lines. When that one's log can no longer be read, its
   cached signature still gives the history.
+- The pack's key, `/data/.pack-key`: 32 random bytes, owner-only, made on
+  first use. It keys the hashes the pack makes of branch names (for
+  ch-step-dedupe, which only tells branches apart) and of step names over
+  200 characters, so neither a part nor the cache holds a hash of a name
+  that can be guessed and checked.
 - Each cached run records the failure-signature algorithm that signed it, as
   ch-step-failure-signature names it. A run signed by another algorithm, or
   cached before the field, would never match, so it is read again within
@@ -116,7 +137,7 @@ client such as Claude Code shows as slash commands. Each asks only for what
 - `ci_triage_latest`: Triage the latest failed CI run.
 - `ci_triage_run`: Triage a specific CI run (its `run_id`).
 - `ci_new_or_recurring`: Is this CI failure new, flaky or recurring?
-- `ci_who_touched`: Who last touched the failing step?
+- `ci_who_touched`: Who wrote the commits the CI failure occurred on?
 
 Each takes an optional `repo` (owner/name); without one the agent uses the
 repository it is working in.
@@ -126,8 +147,9 @@ repository it is working in.
 `dependencies`. The tests use each part's tarball, recorded in
 [test/fixtures/parts](test/fixtures/parts/README.md).
 
-Each package has its own repository; the family's design, plan and acceptance
-tests are in [ch-packs](https://github.com/mchen6/ch-packs) (public).
+Part of the countinghouse client packs. Each package has its own repository. The family's design and plan are in
+[ch-packs](https://github.com/mchen6/ch-packs) (public); the end-to-end acceptance test, which installs every package
+and calls the tool, runs in [ch-local](https://github.com/mchen6/ch-local)'s CI.
 
 ## Development
 
@@ -137,9 +159,8 @@ npm test
 npm run validate   # packs the module and runs countinghouse-validate on the tarball
 ```
 
-Pure JavaScript, no native module. Node 24 or later today (the runtime's
-floor); 22.16 once countinghouse's floor shim lands (design). CI runs on
-Linux, macOS and Windows.
+Pure JavaScript, no native module. Node 22.16 or later, as countinghouse.
+CI runs Node 24 on Linux, macOS and Windows.
 
 ## Publishing
 

@@ -43,7 +43,22 @@ test('the no-failed-run answer matches the declared output', async () => {
   assert.ok(!validOutput({...out, receipt: {}}), 'a receipt field is not this module\'s');
 });
 
+// (the final pass, A7) a run_id naming a run that did not fail is answered
+// in a third shape
+test('the run-not-failed answer matches the declared output', async () => {
+  for (const conclusion of ['success', null, 'cancelled']) {
+    const out = await go(world({runs: [{id: 2, conclusion: 'failure', at: '2026-11-10T00:02:00Z', jobs: [{id: 20, name: 't', step: 'Run x', log: runnerLog('Run x', ['Error: boom'])}]},
+      {id: 1, conclusion, at: '2026-11-10T00:01:00Z'}]}), {runId: '1'});
+    assert.strictEqual(out.status, 'run-not-failed');
+    assert.ok(validOutput(out), JSON.stringify(validOutput.errors));
+    assert.ok(!validOutput({...out, run: {...out.run, url: 'x'}}), 'closed');
+  }
+});
+
 test('the declared input takes no arguments, or the five optional ones', () => {
+  // (A12: run_id as a number too)
+  assert.ok(validInput({run_id: 42}));
+  assert.ok(!validInput({run_id: 0}) && !validInput({run_id: 1.5}) && !validInput({run_id: '042'}));
   assert.ok(validInput({}));
   assert.ok(validInput({run_id: '42', repo: 'a/b', window: 50, max_logs: 20, owner_hint: false}));
   assert.ok(!validInput({extra: 1}));
@@ -51,10 +66,11 @@ test('the declared input takes no arguments, or the five optional ones', () => {
 });
 
 // Reviewer, #1: the output schema guarantees the shape: an object at the root
-// (MCP's outputSchema), one of the two answers, every object closed.
-test('the output schema is an object of one of two closed shapes, closed all the way down', () => {
+// (MCP's outputSchema), one of the three answers (run-not-failed since the
+// final pass, A7), every object closed.
+test('the output schema is an object of one of three closed shapes, closed all the way down', () => {
   assert.strictEqual(schema.output.type, 'object');
-  assert.strictEqual(schema.output.oneOf.length, 2);
+  assert.strictEqual(schema.output.oneOf.length, 3);
   const open = [];
   const walk = (node, where) => {
     if (node == null || typeof node !== 'object') return;
@@ -64,7 +80,7 @@ test('the output schema is an object of one of two closed shapes, closed all the
   walk(schema.output, 'output');
   assert.deepStrictEqual(open, []);
   const shapes = schema.output.oneOf.map((s) => Object.keys(s.properties).join(','));
-  assert.deepStrictEqual(shapes, ['summary,run,failed_jobs,errors,history,owner_hint,coverage', 'status,summary,lastSuccess,coverage']);
+  assert.deepStrictEqual(shapes, ['summary,run,failed_jobs,errors,history,owner_hint,coverage', 'status,summary,lastSuccess,coverage', 'status,summary,run,coverage']);
 });
 
 test('the action is ci_failure_triage, the tool name the model sees', () => {

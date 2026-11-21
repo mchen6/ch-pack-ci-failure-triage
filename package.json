@@ -1,6 +1,6 @@
 {
   "name": "@countinghouse/ch-pack-ci-failure-triage",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "countinghouse scenario: one call answers \"why did CI fail?\" with the failing step, the error lines, the cross-run history and a measured receipt of what was read and what reached the model.",
   "license": "Apache-2.0",
   "repository": {
@@ -55,7 +55,7 @@
     "@countinghouse/ch-step-log-clean": "file:test/fixtures/parts/countinghouse-ch-step-log-clean-0.2.2.tgz",
     "@countinghouse/ch-step-owner-hint": "file:test/fixtures/parts/countinghouse-ch-step-owner-hint-0.1.1.tgz",
     "@countinghouse/ch-step-redact": "file:test/fixtures/parts/countinghouse-ch-step-redact-0.2.3.tgz",
-    "@countinghouse/ch-step-report": "file:test/fixtures/parts/countinghouse-ch-step-report-0.4.3.tgz",
+    "@countinghouse/ch-step-report": "file:test/fixtures/parts/countinghouse-ch-step-report-0.4.4.tgz",
     "countinghouse": "git+https://github.com/mchen6/countinghouse.git#c26b9fcbe484a0fb4f902ab6d45ec2062f20bf33"
   },
   "allowScripts": {
