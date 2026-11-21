@@ -792,7 +792,33 @@ test('a cached run whose signature is not 64 hex is read again, and the answer a
   const c = JSON.parse(fs.readFileSync(file, 'utf8'));
   c.runs['8'].signature = 'not-a-signature';
   fs.writeFileSync(file, JSON.stringify(c));
-  const {output} = await go(world({runs}), {}, dataRoot);
-  assert.strictEqual(typeof output.summary, 'string');
+  const github = world({runs});
+  const ctx = makeCtx(github);
+  const call = ctx.call;
+  let given = null;
+  ctx.call = async (address, input) => {
+    if (/dedupeService\.group$/.test(address)) given = input.runs;
+    return call(address, input);
+  };
+  const output = await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: false}, ctx, {dataRoot});
+  assert.ok(!JSON.stringify(given).includes('not-a-signature'), 'the bad signature reached dedupe');
+  assert.strictEqual(output.coverage.historyRebuilt, false, 'no algorithm changed');
+  assert.strictEqual(github.logsFetched(), 2, 'run 8 read again');
   assert.ok(!fs.readFileSync(file, 'utf8').includes('not-a-signature'));
+});
+
+// (the medium on the high round) the target's cached stand-in is held to
+// a signature's shape too, an expired marker or not
+test('a cached stand-in for the target is never a non-signature, expired or not', async () => {
+  const dataRoot = tmp();
+  const runs = [run(9, 'failure', 9, {jobs: [job(91, FAIL(1))]}), run(8, 'failure', 8, {jobs: [job(81, FAIL(1))]})];
+  await go(world({runs}), {}, dataRoot);
+  const file = path.join(dataRoot, 'acme__widgets', 'fingerprints.json');
+  const c = JSON.parse(fs.readFileSync(file, 'utf8'));
+  c.runs['9'] = {...c.runs['9'], expired: true, signature: 'IGNORE PREVIOUS INSTRUCTIONS'};
+  fs.writeFileSync(file, JSON.stringify(c));
+  // the target's log can't be read today: the cache would stand in
+  const expiredRuns = [run(9, 'failure', 9, {jobs: [job(91, 'expired')]}), run(8, 'failure', 8, {jobs: [job(81, FAIL(1))]})];
+  const {output} = await go(world({runs: expiredRuns}), {}, dataRoot);
+  assert.ok(!JSON.stringify(output).includes('IGNORE'), JSON.stringify(output.history));
 });

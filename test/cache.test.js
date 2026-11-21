@@ -98,14 +98,36 @@ test('the pack key is made once and read back; a link, a loose file or a short o
 
 // (the reviewer's high on #18, M3) no makeable key costs no waiting: the
 // process's own key at once, never a pause per hash
-test('with no key to be had, keyed hashes do not wait', () => {
+const {testHooks} = require('../lib/cache');
+test('with no key to be had, keyed hashes do not wait; a transient open error is retried by the next hash', () => {
   if (process.platform === 'win32' || process.getuid() === 0) return;
-  const root = tmp();
-  fs.chmodSync(root, 0o500);
+  let pauses = 0;
+  testHooks.pause = () => { pauses += 1; };
   try {
-    const t0 = Date.now();
-    for (let i = 0; i < 100; i++) keyedHash(`b${i}`, root);
-    assert.ok(Date.now() - t0 < 1000, `${Date.now() - t0} ms for 100 keyed hashes`);
-    assert.strictEqual(keyedHash('x', root), keyedHash('x', root), 'one key for the process');
-  } finally { fs.chmodSync(root, 0o700); }
+    const root = tmp();
+    fs.chmodSync(root, 0o500);
+    try {
+      for (let i = 0; i < 100; i++) keyedHash(`b${i}`, root);
+      assert.strictEqual(pauses, 0, 'no pause when no key can be made');
+      assert.strictEqual(keyedHash('x', root), keyedHash('x', root), 'one key for the process');
+    } finally { fs.chmodSync(root, 0o700); }
+    // a key file that can't be opened just now (EACCES), then can: the real key
+    const later = tmp();
+    const real = crypto.randomBytes(32);
+    fs.writeFileSync(path.join(later, '.pack-key'), real, {mode: 0o600});
+    fs.chmodSync(path.join(later, '.pack-key'), 0);
+    const before = keyedHash('y', later);
+    fs.chmodSync(path.join(later, '.pack-key'), 0o600);
+    assert.notStrictEqual(before, hmac(real, 'y'));
+    assert.strictEqual(keyedHash('y', later), hmac(real, 'y'), 'the real key once it can be read');
+    // the race: another launcher links the key first; this one pauses and reads it
+    const raced = tmp();
+    const theirs = crypto.randomBytes(32);
+    testHooks.beforeLink = (file) => { fs.writeFileSync(file, theirs, {mode: 0o600}); };
+    assert.strictEqual(keyedHash('z', raced), hmac(theirs, 'z'), 'the winner\'s key');
+    assert.ok(pauses >= 1, 'the race paused');
+  } finally {
+    testHooks.pause = null;
+    testHooks.beforeLink = null;
+  }
 });
