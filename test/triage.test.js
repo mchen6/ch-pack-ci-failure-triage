@@ -757,3 +757,22 @@ test('job listings are bounded: max_logs plus the 50 unavailable, however many f
   await triage({repo: 'acme/widgets', window: 100, maxLogs: 5, ownerHint: false}, ctx, {dataRoot: tmp()});
   assert.ok(listings <= 5 + 50 + 1, String(listings));
 });
+
+// (P3, end to end with ch-step-report 0.4.2) a git error over ssh and a
+// redacted URL keep their text and the answer assembles; an address is
+// masked upstream by ch-step-redact (one that got past it would cost only
+// its field: ch-step-report's own tests)
+test('a git error over ssh and a redacted token URL assemble; an address is masked upstream', async () => {
+  const token = tokenOf('p3-url');
+  const runs = [run(9, 'failure', 9, {jobs: [
+    {id: 91, name: 'fetch', step: 'Fetch', log: runnerLog('Run git fetch', ['fatal: Could not read from remote repository ssh://git@github.com/o/r.git'])},
+    {id: 92, name: 'push', step: 'Push', log: runnerLog('Run git push', [`Error: push to https://x-access-token:${token}@github.com/o/r.git refused`])},
+    {id: 93, name: 'mail', step: 'Notify', log: runnerLog('Run notify', ['Error: could not mail bob@corp.example'])}]})];
+  const {output} = await go(world({runs}), {});
+  assert.strictEqual(output.failed_jobs.length, 3, JSON.stringify(output).slice(0, 300));
+  assert.match(output.failed_jobs[0].first_error, /ssh:\/\/git@github\.com\/o\/r\.git/);
+  assert.ok(!JSON.stringify(output).includes(token.slice(0, 8)));
+  assert.match(output.failed_jobs[1].first_error, /github\.com/);
+  assert.strictEqual(output.failed_jobs[2].first_error, 'Error: could not mail <email>');
+  assert.strictEqual(output.failed_jobs[2].step, 'Notify');
+});
