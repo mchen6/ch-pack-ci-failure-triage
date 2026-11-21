@@ -44,15 +44,54 @@ test('a cache write whose cleanup fails costs nothing: no throw', () => {
   }
 });
 
-// (the fourth medium, pre-existing) a cache that can't be read is never
-// written over: only one that isn't there yet is started afresh
-test('an unreadable or other-version cache is never written over', () => {
-  for (const make of [(root) => { seed(root, {1: {jobId: 1}}); fs.writeFileSync(fileOf(root), '{not json'); }, (root) => fs.writeFileSync(fileOf(root), JSON.stringify({version: 2, runs: {1: {jobId: 1}}}))]) {
+// (the fourth and fifth mediums) a cache that can't be read just now is
+// never written over; one that can't be parsed, or is another version's,
+// is moved aside and a fresh one started (never caching off for good)
+test('a cache that cannot be read now is left alone; one that cannot be parsed is moved aside and started afresh', () => {
+  for (const make of [(root) => fs.writeFileSync(fileOf(root), '{not json'), (root) => fs.writeFileSync(fileOf(root), JSON.stringify({version: 2, runs: {1: {jobId: 1}}}))]) {
     const root = tmp();
     seed(root, {});
     make(root);
     const before = fs.readFileSync(fileOf(root), 'utf8');
-    assert.strictEqual(writeCache('acme/widgets', {9: {jobId: 9}}, root), false);
-    assert.strictEqual(fs.readFileSync(fileOf(root), 'utf8'), before, 'left as it was');
+    assert.strictEqual(writeCache('acme/widgets', {9: {jobId: 9}}, root), true);
+    assert.deepStrictEqual(Object.keys(JSON.parse(fs.readFileSync(fileOf(root), 'utf8')).runs), ['9']);
+    const aside = fs.readdirSync(path.dirname(fileOf(root))).filter((n) => n.startsWith('fingerprints.json.unreadable-'));
+    assert.strictEqual(aside.length, 1, 'moved aside');
+    assert.strictEqual(fs.readFileSync(path.join(path.dirname(fileOf(root)), aside[0]), 'utf8'), before);
+  }
+  if (process.platform !== 'win32' && process.getuid() !== 0) {
+    const root = tmp();
+    seed(root, {1: {jobId: 1}});
+    fs.chmodSync(fileOf(root), 0);
+    try {
+      assert.strictEqual(writeCache('acme/widgets', {9: {jobId: 9}}, root), false);
+    } finally { fs.chmodSync(fileOf(root), 0o600); }
+    assert.deepStrictEqual(Object.keys(JSON.parse(fs.readFileSync(fileOf(root), 'utf8')).runs), ['1'], 'left as it was');
+  }
+});
+
+// (the fifth medium) the pack's key: made atomically, read only as this
+// user's own owner-only 32-byte file, never a link; anything else, and no
+// key at all, gives a key of this process's own, never a plain hash
+const crypto = require('node:crypto');
+const {keyedHash, keyId} = require('../lib/cache');
+const hmac = (key, s) => crypto.createHmac('sha256', key).update(s).digest('hex');
+test('the pack key is made once and read back; a link, a loose file or a short one is never used', () => {
+  const root = tmp();
+  const first = keyedHash('x', root);
+  const key = fs.readFileSync(path.join(root, '.pack-key'));
+  assert.strictEqual(key.length, 32);
+  assert.strictEqual(first, hmac(key, 'x'));
+  if (process.platform === 'win32') return;
+  const theirs = crypto.randomBytes(32);
+  for (const plant of [(file) => { fs.writeFileSync(`${file}.target`, theirs); fs.symlinkSync(`${file}.target`, file); },
+    (file) => { fs.writeFileSync(file, theirs); fs.chmodSync(file, 0o644); }, (file) => fs.writeFileSync(file, theirs.subarray(0, 7), {mode: 0o600})]) {
+    const r = tmp();
+    plant(path.join(r, '.pack-key'));
+    const got = keyedHash('x', r);
+    assert.ok(typeof got === 'string' && /^[0-9a-f]{64}$/.test(got));
+    assert.notStrictEqual(got, hmac(theirs, 'x'), 'a planted key was used');
+    assert.notStrictEqual(got, crypto.createHash('sha256').update('x').digest('hex'), 'a plain hash');
+    assert.notStrictEqual(keyId(r), keyId(root));
   }
 });

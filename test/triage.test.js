@@ -344,7 +344,7 @@ test('each cached run records the algorithm that signed it; the same algorithm k
   assert.strictEqual(first.output.coverage.historyRebuilt, false, 'a first call rebuilds nothing');
   assert.strictEqual(signCalls(first.ctx), 3, 'no probe: the target\'s own sign output names the algorithm');
   const cache = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
-  assert.deepStrictEqual(Object.values(cache.runs).map((r) => r.algorithm), ['fs1+rules2+names2', 'fs1+rules2+names2', 'fs1+rules2+names2']);
+  assert.deepStrictEqual(Object.values(cache.runs).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules2+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
   const again = world({runs: THREE()});
   const second = await go(again, {}, first.dataRoot);
   assert.strictEqual(again.logsFetched(), 1, 'only the latest failed run, for its error lines');
@@ -369,7 +369,7 @@ for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0+rule
     assert.match(second.output.summary, /; history rebuilt \(the failure signature changed\)/);
     const rewritten = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
     assert.ok(!JSON.stringify(rewritten).includes('stale-signature'), 'every one rewritten with the current algorithm');
-    assert.deepStrictEqual(Object.values(rewritten.runs).map((r) => r.algorithm), ['fs1+rules2+names2', 'fs1+rules2+names2', 'fs1+rules2+names2']);
+    assert.deepStrictEqual(Object.values(rewritten.runs).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules2+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
   });
 }
 
@@ -612,7 +612,7 @@ test('a cache signed over raw step names is rebuilt, and a raw step on disk is h
   await go(world({runs}), {}, dataRoot);
   const file = path.join(dataRoot, 'acme__widgets', 'fingerprints.json');
   const cache = JSON.parse(fs.readFileSync(file, 'utf8'));
-  for (const r of Object.values(cache.runs)) { r.algorithm = r.algorithm.replace(/\+names\d+$/, '+names1'); r.step = 'Run npm test'; }
+  for (const r of Object.values(cache.runs)) { r.algorithm = r.algorithm.replace(/\+names\d+(?:\.[0-9a-f]+)?$/, '+names1'); r.step = 'Run npm test'; }
   fs.writeFileSync(file, JSON.stringify(cache));
   const {output} = await go(world({runs}), {}, dataRoot);
   assert.strictEqual(output.coverage.historyRebuilt, true);
