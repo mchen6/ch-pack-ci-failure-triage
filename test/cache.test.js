@@ -43,3 +43,16 @@ test('a cache write whose cleanup fails costs nothing: no throw', () => {
     fs.rmSync = rmSync;
   }
 });
+
+// (the fourth medium, pre-existing) a cache that can't be read is never
+// written over: only one that isn't there yet is started afresh
+test('an unreadable or other-version cache is never written over', () => {
+  for (const make of [(root) => { seed(root, {1: {jobId: 1}}); fs.writeFileSync(fileOf(root), '{not json'); }, (root) => fs.writeFileSync(fileOf(root), JSON.stringify({version: 2, runs: {1: {jobId: 1}}}))]) {
+    const root = tmp();
+    seed(root, {});
+    make(root);
+    const before = fs.readFileSync(fileOf(root), 'utf8');
+    assert.strictEqual(writeCache('acme/widgets', {9: {jobId: 9}}, root), false);
+    assert.strictEqual(fs.readFileSync(fileOf(root), 'utf8'), before, 'left as it was');
+  }
+});

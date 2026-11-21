@@ -344,7 +344,7 @@ test('each cached run records the algorithm that signed it; the same algorithm k
   assert.strictEqual(first.output.coverage.historyRebuilt, false, 'a first call rebuilds nothing');
   assert.strictEqual(signCalls(first.ctx), 3, 'no probe: the target\'s own sign output names the algorithm');
   const cache = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
-  assert.deepStrictEqual(Object.values(cache.runs).map((r) => r.algorithm), ['fs1+rules2+names1', 'fs1+rules2+names1', 'fs1+rules2+names1']);
+  assert.deepStrictEqual(Object.values(cache.runs).map((r) => r.algorithm), ['fs1+rules2+names2', 'fs1+rules2+names2', 'fs1+rules2+names2']);
   const again = world({runs: THREE()});
   const second = await go(again, {}, first.dataRoot);
   assert.strictEqual(again.logsFetched(), 1, 'only the latest failed run, for its error lines');
@@ -369,7 +369,7 @@ for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0+rule
     assert.match(second.output.summary, /; history rebuilt \(the failure signature changed\)/);
     const rewritten = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
     assert.ok(!JSON.stringify(rewritten).includes('stale-signature'), 'every one rewritten with the current algorithm');
-    assert.deepStrictEqual(Object.values(rewritten.runs).map((r) => r.algorithm), ['fs1+rules2+names1', 'fs1+rules2+names1', 'fs1+rules2+names1']);
+    assert.deepStrictEqual(Object.values(rewritten.runs).map((r) => r.algorithm), ['fs1+rules2+names2', 'fs1+rules2+names2', 'fs1+rules2+names2']);
   });
 }
 
@@ -612,7 +612,7 @@ test('a cache signed over raw step names is rebuilt, and a raw step on disk is h
   await go(world({runs}), {}, dataRoot);
   const file = path.join(dataRoot, 'acme__widgets', 'fingerprints.json');
   const cache = JSON.parse(fs.readFileSync(file, 'utf8'));
-  for (const r of Object.values(cache.runs)) { r.algorithm = r.algorithm.replace(/\+names\d+$/, ''); r.step = 'Run npm test'; }
+  for (const r of Object.values(cache.runs)) { r.algorithm = r.algorithm.replace(/\+names\d+$/, '+names1'); r.step = 'Run npm test'; }
   fs.writeFileSync(file, JSON.stringify(cache));
   const {output} = await go(world({runs}), {}, dataRoot);
   assert.strictEqual(output.coverage.historyRebuilt, true);
@@ -693,7 +693,38 @@ test('a cut step name\'s placeholder carries no hash of it', async () => {
   await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: false}, ctx, {dataRoot: tmp()});
   const placeholder = names.find((n) => /over 200 characters/.test(n));
   assert.ok(placeholder != null, JSON.stringify(names));
-  assert.ok(!/[0-9a-f]{8}/.test(placeholder), placeholder);
+  // (no unkeyed hash of the cut name: a known command plus a few unknown
+  // characters is a hash one can search)
+  const cut = `${header.slice(0, 199)}…`;
+  assert.ok(!placeholder.includes(crypto.createHash('sha256').update(cut).digest('hex').slice(0, 12)), placeholder);
+  assert.ok(!placeholder.includes(token.slice(0, 8)), placeholder);
+});
+
+// (the fourth medium) a cut name is told apart by a keyed hash: two long
+// commands at one place sign differently, one long command at two places
+// alike; the key is the pack's own, owner-only, in its /data
+test('two different cut step names sign differently, one cut name alike wherever it is', async () => {
+  const dataRoot = tmp();
+  const signed = [];
+  const sign = async (runs) => {
+    const ctx = makeCtx(world({runs}));
+    const call = ctx.call;
+    ctx.call = async (address, input) => {
+      if (/failure-signature\//.test(address) && input.failingStep != null) signed.push(input.failingStep);
+      return call(address, input);
+    };
+    await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: false}, ctx, {dataRoot});
+  };
+  const long = (what) => `Run ${what} ${'a'.repeat(220)}`;
+  await sign([run(9, 'failure', 9, {jobs: [{id: 91, name: 'deploy', step: 'Deploy', log: headerLog(long('deploy'), ['Error: x'])}]})]);
+  await sign([run(19, 'failure', 19, {jobs: [{id: 191, name: 'deploy', step: 'Migrate', log: headerLog(long('migrate'), ['Error: x'])}]})]);
+  assert.strictEqual(signed.length, 2);
+  assert.notStrictEqual(signed[0], signed[1], 'two cut names, one placeholder');
+  await sign([run(29, 'failure', 29, {jobs: [{id: 291, name: 'deploy', step: 'Deploy', log: headerLog(long('deploy'), ['Error: x'])}]})]);
+  assert.strictEqual(signed[2], signed[0], 'one cut name, one placeholder');
+  const keyFile = path.join(dataRoot, '.pack-key');
+  assert.ok(fs.existsSync(keyFile));
+  if (process.platform !== 'win32') assert.strictEqual(fs.statSync(keyFile).mode & 0o777, 0o600);
 });
 
 test('ch-step-dedupe gets each branch by a hash: two token-bearing branches stay two', async () => {
