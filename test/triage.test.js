@@ -347,7 +347,7 @@ test('each cached run records the algorithm that signed it; the same algorithm k
   assert.strictEqual(first.output.coverage.historyRebuilt, false, 'a first call rebuilds nothing');
   assert.strictEqual(signCalls(first.ctx), 3, 'no probe: the target\'s own sign output names the algorithm');
   const cache = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
-  assert.deepStrictEqual(Object.values(cache.runs).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules2+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
+  assert.deepStrictEqual(Object.values(cache.runs).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules3+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
   const again = world({runs: THREE()});
   const second = await go(again, {}, first.dataRoot);
   assert.strictEqual(again.logsFetched(), 1, 'only the latest failed run, for its error lines');
@@ -372,7 +372,7 @@ for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0+rule
     assert.match(second.output.summary, /; history rebuilt \(the failure signature changed\)/);
     const rewritten = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
     assert.ok(!JSON.stringify(rewritten).includes('5'.repeat(64)), 'every one rewritten with the current algorithm');
-    assert.deepStrictEqual(Object.values(rewritten.runs).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules2+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
+    assert.deepStrictEqual(Object.values(rewritten.runs).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules3+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
   });
 }
 
@@ -951,6 +951,8 @@ test('a cached failure that passed on re-run is still counted: the next failure 
   const {output} = await go(world({runs: [run(6, 'failure', 6, {jobs: [job(60, FAIL(1))]}), run(5, 'success', 5), run(4, 'success', 4)]}), {}, dataRoot);
   assert.notStrictEqual(output.history.verdict, 'new', output.summary);
   assert.deepStrictEqual(output.history.runIds, ['5', '6']);
+  // (it passed on its commit: flaky, by dedupe 0.1.2's passedOnRerun)
+  assert.strictEqual(output.history.verdict, 'flaky', output.summary);
 });
 
 // A12: a failed run with no jobs is cached: not listed again on every call

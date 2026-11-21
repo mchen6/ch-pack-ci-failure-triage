@@ -49,8 +49,8 @@
   },
   "devDependencies": {
     "@countinghouse/ch-access-github": "file:test/fixtures/parts/countinghouse-ch-access-github-0.2.1.tgz",
-    "@countinghouse/ch-step-dedupe": "file:test/fixtures/parts/countinghouse-ch-step-dedupe-0.1.1.tgz",
-    "@countinghouse/ch-step-error-patterns": "file:test/fixtures/parts/countinghouse-ch-step-error-patterns-0.2.1.tgz",
+    "@countinghouse/ch-step-dedupe": "file:test/fixtures/parts/countinghouse-ch-step-dedupe-0.1.2.tgz",
+    "@countinghouse/ch-step-error-patterns": "file:test/fixtures/parts/countinghouse-ch-step-error-patterns-0.2.2.tgz",
     "@countinghouse/ch-step-failure-signature": "file:test/fixtures/parts/countinghouse-ch-step-failure-signature-0.2.1.tgz",
     "@countinghouse/ch-step-log-clean": "file:test/fixtures/parts/countinghouse-ch-step-log-clean-0.2.3.tgz",
     "@countinghouse/ch-step-owner-hint": "file:test/fixtures/parts/countinghouse-ch-step-owner-hint-0.1.2.tgz",
