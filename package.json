@@ -53,7 +53,7 @@
     "@countinghouse/ch-step-failure-signature": "file:test/fixtures/parts/countinghouse-ch-step-failure-signature-0.2.1.tgz",
     "@countinghouse/ch-step-dedupe": "file:test/fixtures/parts/countinghouse-ch-step-dedupe-0.1.1.tgz",
     "@countinghouse/ch-step-owner-hint": "file:test/fixtures/parts/countinghouse-ch-step-owner-hint-0.1.1.tgz",
-    "@countinghouse/ch-step-redact": "file:test/fixtures/parts/countinghouse-ch-step-redact-0.2.2.tgz",
+    "@countinghouse/ch-step-redact": "file:test/fixtures/parts/countinghouse-ch-step-redact-0.2.3.tgz",
     "@countinghouse/ch-step-report": "file:test/fixtures/parts/countinghouse-ch-step-report-0.4.1.tgz",
     "@countinghouse/ch-access-github": "file:test/fixtures/parts/countinghouse-ch-access-github-0.2.1.tgz",
     "countinghouse": "git+https://github.com/mchen6/countinghouse.git#c26b9fcbe484a0fb4f902ab6d45ec2062f20bf33"
