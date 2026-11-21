@@ -153,6 +153,9 @@ test('the owner hint names logins of the first-seen commit and the group\'s othe
   const gh = world({runs, commits: {[sha(2)]: 'first-author', [sha(3)]: 'later-author'}});
   const {output} = await go(gh, {});
   assert.deepStrictEqual(output.owner_hint.logins, ['first-author', 'later-author']);
+  // (owner-hint 0.1.2: the later commits are ones the failure recurred on,
+  // never "a recent change before" it -- the final pass, A2's follow-up)
+  assert.match(output.owner_hint.why[1], /a later commit this failure also occurred on/, output.owner_hint.why[1]);
   const none = await go(world({runs}), {ownerHint: false});
   assert.strictEqual(none.output.owner_hint, null);
 });
@@ -699,8 +702,15 @@ test('a cut step name\'s placeholder carries no hash of it', async () => {
   assert.ok(placeholder != null, JSON.stringify(names));
   // (no unkeyed hash of the cut name: a known command plus a few unknown
   // characters is a hash one can search)
-  const cut = `${header.slice(0, 199)}…`;
-  assert.ok(!placeholder.includes(crypto.createHash('sha256').update(cut).digest('hex').slice(0, 12)), placeholder);
+  // (the cut as ch-step-log-clean makes it, from the part itself: the final
+  // pass, A1 -- a hand-built cut form went stale when log-clean 0.2.3 began
+  // cutting at a space, and the check became vacuous)
+  const clean = require('@countinghouse/ch-step-log-clean/handlers/cleanService/clean.js');
+  const partCtx = {error: (code, message) => Object.assign(new Error(message), {code})};
+  const cleaned = (await clean({text: headerLog(header, ['Error: push refused'])}, partCtx)).output.steps;
+  const cut = cleaned.map((st) => st.name).find((n) => n.endsWith('…') && header.startsWith(n.slice(0, -1)));
+  assert.ok(cut != null && cut.length <= 200, JSON.stringify(cleaned.map((st) => st.name)));
+  for (const n of [12, 16, 64]) assert.ok(!placeholder.includes(crypto.createHash('sha256').update(cut).digest('hex').slice(0, n)), placeholder);
   assert.ok(!placeholder.includes(token.slice(0, 8)), placeholder);
 });
 
@@ -851,7 +861,8 @@ test('the no-failed-run answer withholds an address or a credential URL in lastS
     assert.strictEqual(output.status, 'no-failed-run');
     // (the two credential URLs redact misses are withheld; a plain address
     // redact already masks as <email>; either way none of it is shown)
-    if (!workflow.startsWith('notify')) assert.strictEqual(output.lastSuccess.workflow, '(withheld: it holds an e-mail address)', workflow);
+    // (redact 0.2.4 masks the credential URL itself; the property is that
+    // none of it is shown, withheld or masked)
     for (const leak of ['hunter2', 'corp.com', 'corp.example']) assert.ok(!JSON.stringify(output).includes(leak), `${leak}: ${JSON.stringify(output.lastSuccess)}`);
   }
   const {output} = await go(world({runs: [run(9, 'success', 9, {workflow: 'CI', branch: 'main'})]}), {});
@@ -862,11 +873,12 @@ test('the no-failed-run answer withholds an address or a credential URL in lastS
 
 // A2: the owner hint is a suggestion; a login owner-hint refuses (an
 // Enterprise Managed Users login, jdoe_acme) never fails the call
-test('owner-hint refusing a login gives no hint, never a failed call', async () => {
+// (owner-hint 0.1.2 takes `_`, so the login is named; a refusal of the
+// part's own is the stubbed case below: the hint is dropped)
+test('an Enterprise Managed Users login (jdoe_acme) is named, never a failed call', async () => {
   const gh = world({runs: [run(9, 'failure', 9, {jobs: [job(90, FAIL(1))]})], commits: {[sha(9)]: 'jdoe_acme'}});
   const {output} = await go(gh, {});
-  assert.strictEqual(output.owner_hint, null);
-  assert.strictEqual(typeof output.summary, 'string');
+  assert.deepStrictEqual(output.owner_hint.logins, ['jdoe_acme']);
 });
 
 // A4: first_error and the order of errors come from the failing step first;
@@ -955,8 +967,61 @@ test('a failed run with no jobs is listed once, then cached', async () => {
 // (the final pass, s3 C2) a login owner-hint passes but the report refuses
 // (a bot login over 39 characters): the hint is dropped, never the call
 test('a hint the report refuses is dropped, never a failed call', async () => {
-  const gh = world({runs: [run(9, 'failure', 9, {jobs: [job(90, FAIL(1))]})], commits: {[sha(9)]: `${'my-organisation-release-automation-app'}[bot]`}});
+  // (the report takes 39 and "[bot]" since 0.4.4: one past that)
+  const gh = world({runs: [run(9, 'failure', 9, {jobs: [job(90, FAIL(1))]})], commits: {[sha(9)]: `${'a'.repeat(40)}[bot]`}});
   const {output} = await go(gh, {});
   assert.strictEqual(output.owner_hint, null);
   assert.strictEqual(typeof output.summary, 'string');
+});
+
+// ---- the medium on the final-pass PR ----
+const withCall = (gh, wrap) => { const ctx = makeCtx(gh); const call = ctx.call; ctx.call = (address, input) => wrap(address, input, call); return ctx; };
+const goCtx = (ctx, input = {}, dataRoot = tmp()) => triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: true, ...input}, ctx, {dataRoot});
+test('only a part\'s own refusal drops the hint; any other failure fails the call, once', async () => {
+  const runs = [run(9, 'failure', 9, {jobs: [job(90, FAIL(1))]})];
+  let assembles = 0;
+  const refusing = withCall(world({runs}), (a, input, call) => {
+    if (/reportService\.assemble$/.test(a)) { assembles++; if (input.ownerHint != null) throw Object.assign(new Error('no'), {code: 'INPUT_REJECTED'}); }
+    return call(a, input);
+  });
+  assert.strictEqual((await goCtx(refusing)).owner_hint, null);
+  assert.strictEqual(assembles, 2);
+  for (const where of [/reportService\.assemble$/, /ownerService\.hint$/]) {
+    let calls = 0;
+    const busy = withCall(world({runs}), (a, input, call) => {
+      if (where.test(a)) { calls++; throw Object.assign(new Error('busy'), {code: 'RUNTIME_BUSY'}); }
+      return call(a, input);
+    });
+    await assert.rejects(goCtx(busy), (e) => e.code === 'RUNTIME_BUSY', String(where));
+    assert.strictEqual(calls, 1, String(where));
+  }
+});
+
+// a success run triaged by run_id (a continue-on-error job failed) is cached,
+// and never counts as a failure later; a cancelled run with a failed job
+// counts alike whichever run is triaged
+test('a success triaged by run_id never counts as a failure later; a cancelled one with a failed job always does', async () => {
+  const dataRoot = tmp();
+  const runs = [run(6, 'failure', 6, {jobs: [job(60, FAIL(1))]}), run(5, 'success', 5, {jobs: [job(50, FAIL(1))]}), run(4, 'cancelled', 4, {jobs: [job(40, FAIL(1))]})];
+  await go(world({runs}), {runId: '5'}, dataRoot);
+  await go(world({runs}), {runId: '4'}, dataRoot);
+  const {output} = await go(world({runs}), {}, dataRoot);
+  assert.deepStrictEqual(output.history.runIds, ['4', '6']);
+});
+
+// a no-jobs marker holds only while the run's conclusion is the one it was
+// cached under: a re-run that ran jobs is read
+test('a failed run cached with no jobs is read again when its conclusion changes', async () => {
+  const dataRoot = tmp();
+  await go(world({runs: [run(9, 'failure', 9, {jobs: [job(90, FAIL(1))]}), run(8, 'startup_failure', 8, {jobs: []})]}), {}, dataRoot);
+  const again = world({runs: [run(9, 'failure', 9, {jobs: [job(90, FAIL(1))]}), run(8, 'failure', 8, {jobs: [job(80, FAIL(1))]})]});
+  const {output} = await go(again, {}, dataRoot);
+  assert.deepStrictEqual(output.history.runIds, ['8', '9']);
+});
+
+// the run-not-failed coverage counts the run's workflow, as a triage does
+test('the run-not-failed coverage counts the run\'s own workflow', async () => {
+  const gh = world({runs: [run(4, 'failure', 4, {workflow: 'Docs', jobs: [job(40, FAIL(1))]}), run(3, 'success', 3), run(2, 'failure', 2, {jobs: [job(20, FAIL(1))]})]});
+  const {output} = await go(gh, {runId: '3'});
+  assert.deepStrictEqual([output.coverage.runsListed, output.coverage.failedRuns], [2, 1]);
 });

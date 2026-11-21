@@ -269,7 +269,7 @@
                         "items": {
                           "type": "string",
                           "pattern": "^[^@\\s]+$",
-                          "maxLength": 39
+                          "maxLength": 44
                         }
                       },
                       "why": {
@@ -342,7 +342,7 @@
                     "minimum": 0
                   },
                   "capHit": {
-                    "title": "true when a bound stopped the history being read: max_logs logs fetched, or 50 logs unavailable",
+                    "title": "true when a bound stopped a log being read: max_logs logs fetched (the run's own jobs take at most half of them), or 50 logs unavailable",
                     "type": "boolean"
                   },
                   "historyRebuilt": {
@@ -479,7 +479,7 @@
                     "minimum": 0
                   },
                   "capHit": {
-                    "title": "true when a bound stopped the history being read: max_logs logs fetched, or 50 logs unavailable",
+                    "title": "true when a bound stopped a log being read: max_logs logs fetched (the run's own jobs take at most half of them), or 50 logs unavailable",
                     "type": "boolean"
                   },
                   "historyRebuilt": {
@@ -598,7 +598,7 @@
                     "minimum": 0
                   },
                   "capHit": {
-                    "title": "true when a bound stopped the history being read: max_logs logs fetched, or 50 logs unavailable",
+                    "title": "true when a bound stopped a log being read: max_logs logs fetched (the run's own jobs take at most half of them), or 50 logs unavailable",
                     "type": "boolean"
                   },
                   "historyRebuilt": {

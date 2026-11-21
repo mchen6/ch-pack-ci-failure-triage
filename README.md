@@ -98,9 +98,10 @@ summary's declared length allows for the report's 500 and these 300).
   unavailable for another reason, by run and job. An older run that cannot
   be read is counted here, never fatal;
 - cache hits;
-- whether the `max_logs` cap stopped it. The run's own jobs take at most
-  half of `max_logs`, so the history always gets the rest, and a later call
-  reads on from the cache;
+- whether the `max_logs` cap stopped a log being read. The run's own jobs
+  take at most half of `max_logs` (the triaged job's log always), so the
+  history gets the rest, and a later call reads on from the cache. With
+  `max_logs` 1 that one log is the triaged job's;
 - whether the history was rebuilt, because the cache was made with another
   failure-signature algorithm.
 
