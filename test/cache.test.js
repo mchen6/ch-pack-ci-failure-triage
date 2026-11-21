@@ -95,3 +95,17 @@ test('the pack key is made once and read back; a link, a loose file or a short o
     assert.notStrictEqual(keyId(r), keyId(root));
   }
 });
+
+// (the reviewer's high on #18, M3) no makeable key costs no waiting: the
+// process's own key at once, never a pause per hash
+test('with no key to be had, keyed hashes do not wait', () => {
+  if (process.platform === 'win32' || process.getuid() === 0) return;
+  const root = tmp();
+  fs.chmodSync(root, 0o500);
+  try {
+    const t0 = Date.now();
+    for (let i = 0; i < 100; i++) keyedHash(`b${i}`, root);
+    assert.ok(Date.now() - t0 < 1000, `${Date.now() - t0} ms for 100 keyed hashes`);
+    assert.strictEqual(keyedHash('x', root), keyedHash('x', root), 'one key for the process');
+  } finally { fs.chmodSync(root, 0o700); }
+});
