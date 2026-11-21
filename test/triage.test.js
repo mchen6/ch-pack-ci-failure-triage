@@ -524,3 +524,66 @@ for (const [label, around] of [
     }
   });
 }
+
+// The reviewer's pre-work high on pack 1 (P1, 2026-11-21): a step name is a
+// place a token lands (a header such as `Push with x-access-token:...`).
+// GitHub's step name goes through ch-step-redact whole; the log header's,
+// cut by ch-step-log-clean at 200 characters, could keep a fragment
+// redaction no longer recognises. No step name reaches another part, the
+// result or the cache unredacted. (Tokens built at run time.)
+const tokenOf = (seed) => `ghs_${crypto.createHash('sha256').update(seed).digest('hex').slice(0, 36)}`;
+// A log whose failing step opens with a real header: `##[group]Run <cmd>`,
+// the command echoed in cyan, `##[endgroup]` (ch-step-log-clean's header).
+function headerLog(header, lines) {
+  const at = (i) => `2026-11-10T07:30:${String(i % 60).padStart(2, '0')}.0000000Z `;
+  const body = [`##[group]${header}`, `\x1b[36;1m${header.replace(/^Run /, '')}\x1b[0m`, '##[endgroup]', ...lines, '##[error]Process completed with exit code 1.'];
+  return body.map((l, i) => at(i) + l).join('\n');
+}
+// GitHub's step name is the workflow's `name:` ("Push"); the log's header
+// is the step's command (`Run git push https://x-access-token:...`), cut at
+// 200 characters.
+test('a token in a later job\'s step header, cut by log-clean, never reaches the result', async () => {
+  const token = tokenOf('p1-cut');
+  const header = `Run ${'a'.repeat(170)} git push x-access-token:${token}`;
+  const runs = [run(9, 'failure', 9, {jobs: [job(91, FAIL(1)),
+    {id: 92, name: 'deploy', step: 'Push', log: headerLog(header, ['Error: push refused'])}]})];
+  const {output} = await go(world({runs}), {});
+  assert.ok(!JSON.stringify(output).includes(token.slice(0, 8)), JSON.stringify(output.failed_jobs));
+  assert.strictEqual(output.failed_jobs[1].step, 'Push', 'GitHub\'s step name, not the cut header');
+});
+
+test('a token in a step header reaches no other part than ch-step-redact, and no cache file', async () => {
+  const token = tokenOf('p1-whole');
+  const header = `Run git push x-access-token:${token}`;
+  const runs = [run(9, 'failure', 9, {jobs: [{id: 91, name: 'deploy', step: 'Push', log: headerLog(header, ['Error: push refused'])}]})];
+  const ctx = makeCtx(world({runs}));
+  const call = ctx.call;
+  const leaked = [];
+  ctx.call = async (address, input) => {
+    if (!/ch-step-redact\/|ch-access-github\/|ch-step-log-clean\//.test(address) && JSON.stringify(input).includes(token.slice(0, 8))) leaked.push(address);
+    return call(address, input);
+  };
+  const dataRoot = tmp();
+  const output = await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: false}, ctx, {dataRoot});
+  assert.deepStrictEqual(leaked, [], 'a part past redact was given the token');
+  assert.ok(!JSON.stringify(output).includes(token.slice(0, 8)));
+  const cacheText = fs.readFileSync(path.join(dataRoot, 'acme__widgets', 'fingerprints.json'), 'utf8');
+  assert.ok(!cacheText.includes(token.slice(0, 8)), 'the token in the cache');
+  assert.ok(!cacheText.includes('git push'), 'a step name in the cache, not its hash');
+});
+
+// (P3) a failed failedJobs call counts against max_logs, so the unavailable
+// list stays within it and within ch-step-report's 50
+test('runs whose jobs cannot be listed count against max_logs: the report still assembles', async () => {
+  const runs = Array.from({length: 60}, (_, i) => run(100 - i, 'failure', 100 - i, {jobs: [job(1000 + i, FAIL(1))]}));
+  const ctx = makeCtx(world({runs}));
+  const call = ctx.call;
+  ctx.call = async (address, input) => {
+    if (/githubService\.failedJobs$/.test(address) && input.runId !== '100') throw Object.assign(new Error('jobs unavailable'), {code: 'UPSTREAM_ERROR'});
+    return call(address, input);
+  };
+  const output = await triage({repo: 'acme/widgets', window: 60, maxLogs: 20, ownerHint: false}, ctx, {dataRoot: tmp()});
+  assert.ok(typeof output.summary === 'string', JSON.stringify(output).slice(0, 300));
+  assert.ok(output.coverage.logsUnavailable.length <= 20, String(output.coverage.logsUnavailable.length));
+  assert.strictEqual(output.coverage.capHit, true);
+});
