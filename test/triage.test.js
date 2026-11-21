@@ -488,3 +488,39 @@ test('other jobs\' logs count toward max_logs: past it a job is listed with no f
   assert.deepStrictEqual(output.failed_jobs.map((j) => j.first_error != null), [true, true, false, false]);
   assert.strictEqual(output.coverage.capHit, true);
 });
+
+// The reviewer on ch-step-redact#4 and ch-step-log-clean#4 (the chain): a
+// private key block next to a line over 20000 characters. ch-step-log-clean
+// omits that line but keeps its key-block state, and ch-step-redact then
+// drops the block's body. The body starts with no prefix a bare-body rule
+// knows (so only the state carried across the omitted line can mask it), it
+// does reach redact's input, and none of it reaches redact's output or the
+// result: with the BEGIN on the long line, and with the block open before a
+// long line that holds no END. (Markers and body built at run time.)
+for (const [label, around] of [
+  ['the BEGIN on a line over 20000 characters', (K, body) => ['x'.repeat(20001) + `-----BEGIN RSA ${K}`, ...body, `-----END RSA ${K}`]],
+  ['a block open before a line over 20000 characters with no END', (K, body) => [`-----BEGIN RSA ${K}`, body[0], 'y'.repeat(20001), body[1], `-----END RSA ${K}`]]
+]) {
+  test(`a key block, ${label}: its body reaches nothing past ch-step-redact`, async () => {
+    const K = 'PRIVATE ' + 'KEY-----';
+    const body = ['Qw7' + 'Ab12'.repeat(15) + 'x', 'Zq9' + 'Cd34'.repeat(15) + 'y'];
+    const lines = [...around(K, body), 'Error: deploy failed'];
+    const runs = [run(9, 'failure', 9, {jobs: [{id: 92, name: 'deploy', step: 'Run deploy', log: runnerLog('Run deploy', lines)}]})];
+    const ctx = makeCtx(world({runs}));
+    const call = ctx.call;
+    const given = [];
+    const redacted = [];
+    ctx.call = async (address, input) => {
+      const answer = await call(address, input);
+      if (/ch-step-redact\//.test(address)) { given.push(JSON.stringify(input)); redacted.push(JSON.stringify(answer)); }
+      return answer;
+    };
+    const result = await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: false}, ctx, {dataRoot: tmp()});
+    for (const piece of body) {
+      const head = piece.slice(0, 20);
+      assert.ok(given.some((g) => g.includes(head)), `premise: ${head}… reached ch-step-redact`);
+      assert.ok(!redacted.some((r) => r.includes(head)), `redact gave back ${head}…`);
+      assert.ok(!JSON.stringify(result).includes(head), 'nor the result');
+    }
+  });
+}
