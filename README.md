@@ -158,15 +158,29 @@ Three facts you can check on your own machine, with your ch-local home as
 `<home>` (`$COUNTINGHOUSE_HOME`, or `~/.countinghouse`):
 
 - **The pack's only remote host is `https://api.githubcopilot.com`**,
-  GitHub's MCP server, reached by ch-access-github with your token. `node
-  <home>/bin/ch-local.js credentials list` shows each stored key's origin.
+  GitHub's MCP server, reached by ch-access-github with your token. The
+  remote is declared in `countinghouse.remotes` of
+  `<home>/module-store/@countinghouse/ch-access-github/<version>/package.json`,
+  and no other installed module of the pack declares one. `node
+  <home>/bin/ch-local.js credentials list` shows where each stored key may
+  be sent.
 - **The triage cache holds no log text.** It is one `fingerprints.json` per
   repository (`/data/<owner>__<name>/fingerprints.json` inside the pack).
-  Each run's entry holds run and job ids, commit SHAs, times, and hashes:
-  the failure's signature, and the step's name and the error lines, each
-  hashed. It also holds the `algorithm` that signed the entry, and for a
-  failed run with no job, GitHub's `conclusion` word for it.
-  `find <home>/module_data -name fingerprints.json` lists them.
+  - Each run's entry holds the run and job ids, commit SHAs, times and the
+    failure's signature, with the `algorithm` that signed it.
+  - The step's name and the error lines are kept as SHA-256 hashes, not
+    keyed, so a line you already know can be confirmed by hashing it. Only
+    a step name over 200 characters is hashed with the pack's key.
+  - Some entries carry flags: `expired: true` for a log past GitHub's
+    retention, and `notFailed: true` for a run that did not fail.
+  - A failed run with no job has no job id; its entry holds GitHub's
+    `conclusion` word for it.
+  - Beside the caches are the pack's key, `/data/.pack-key` (above). A
+    cache that could not be read is moved aside as
+    `fingerprints.json.unreadable-<time>` and kept as it was, so it holds
+    whatever that file held.
+  - `find <home>/module_data \( -name 'fingerprints.json*' -o -name .pack-key \)`
+    lists them all.
 - **Usage is recorded on this machine**, in `<home>/store/usage`. `node
   <home>/app/node_modules/countinghouse/bin/countinghouse-usage.js
   --usageDir <home>/store/usage` prints the report outside any conversation

@@ -80,7 +80,9 @@ test('the tool tells the agent to pass the repository of the project it works in
 test('the handler validates its input', async () => {
   const ctx = makeCtx(() => { throw new Error('no call'); });
   const invalid = (err) => err.code === 'INPUT_REJECTED';
-  for (const bad of [{repo: 'nope'}, {repo: 'a/b', run_id: 0}, {repo: 'a/b', run_id: 1.5}, {repo: 'a/b', run_id: 'x'}, {repo: 'a/b', window: 0}, {repo: 'a/b', window: 101},
+  // ('foo-/bar' and 'me/..' pass the schema's pattern but not GitHub's
+  // grammar: INPUT_REJECTED, never SETTING_REQUIRED -- the medium on G1)
+  for (const bad of [{repo: 'nope'}, {repo: 'foo-/bar'}, {repo: 'me/..'}, {repo: 'a/b', run_id: 0}, {repo: 'a/b', run_id: 1.5}, {repo: 'a/b', run_id: 'x'}, {repo: 'a/b', window: 0}, {repo: 'a/b', window: 101},
     {repo: 'a/b', max_logs: 0}, {repo: 'a/b', max_logs: 51}, {repo: 'a/b', owner_hint: 'no'}, {repo: 'a/b', extra: 1}]) {
     await assert.rejects(triage(bad, ctx), invalid, JSON.stringify(bad));
   }
