@@ -145,8 +145,32 @@ repository it is working in.
 
 **The parts** are named in `countinghouse.calls`: ch-access-github and the seven
 `ch-step-*` modules. The launcher installs them, and this package has no
-`dependencies`. The tests use each part's tarball, recorded in
+`dependencies`. Only ch-access-github declares a remote (GitHub); this module
+and the step modules declare none. That is what they declare, not a
+confinement: countinghouse does not enforce a network permission yet (its
+[security model](https://github.com/mchen6/countinghouse/blob/master/docs/security-model.md)),
+so their code could still open a connection. The tests use each part's tarball, recorded in
 [test/fixtures/parts](test/fixtures/parts/README.md).
+
+## Verify it yourself
+
+Three facts you can check on your own machine, with your ch-local home as
+`<home>` (`$COUNTINGHOUSE_HOME`, or `~/.countinghouse`):
+
+- **The pack's only remote host is `https://api.githubcopilot.com`**,
+  GitHub's MCP server, reached by ch-access-github with your token. `node
+  <home>/bin/ch-local.js credentials list` shows each stored key's origin.
+- **The triage cache holds no log text.** It is one `fingerprints.json` per
+  repository (`/data/<owner>__<name>/fingerprints.json` inside the pack).
+  Each run's entry holds run and job ids, commit SHAs, times, and hashes:
+  the failure's signature, and the step's name and the error lines, each
+  hashed. It also holds the `algorithm` that signed the entry, and for a
+  failed run with no job, GitHub's `conclusion` word for it.
+  `find <home>/module_data -name fingerprints.json` lists them.
+- **Usage is recorded on this machine**, in `<home>/store/usage`. `node
+  <home>/app/node_modules/countinghouse/bin/countinghouse-usage.js
+  --usageDir <home>/store/usage` prints the report outside any conversation
+  (`--since 7d`, `--groupBy tool`, `--json` or `--csv`).
 
 Part of the countinghouse client packs. Each package has its own repository. The family's design and plan are in
 [ch-packs](https://github.com/mchen6/ch-packs) (public); the end-to-end acceptance test, which installs every package

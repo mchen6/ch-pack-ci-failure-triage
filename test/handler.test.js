@@ -73,6 +73,8 @@ test('the tool tells the agent to pass the repository of the project it works in
   const api = require('../api.json');
   const action = Object.values(api.device.serviceList)[0].actionList.find((a) => a.name === 'ci_failure_triage');
   assert.match(action.description, /Pass repo: 'owner\/name', the repository of the project you are working in/);
+  // (G1, the feature audit) and what happens without it: the setting, then the runtime's refusal
+  assert.match(action.description, /with none, the module's defaultRepo setting is used; with neither, the call fails and asks for that setting \(SETTING_REQUIRED\)/);
 });
 
 test('the handler validates its input', async () => {
