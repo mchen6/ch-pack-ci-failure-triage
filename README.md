@@ -45,14 +45,23 @@ three shapes). The triage result has exactly these fields:
   has `ctx.usage()` (below); at most 801 characters.
 - **`run`:** `{id, url, branch, commit, workflow, job, step}`.
 - **`failed_jobs`:** every failed job of the run (at most 50 listed), each
-  `{job, step, first_error}`; the pack cannot tell which of them gate the
-  run. `first_error` is the failing step's first error line, or `null` when
-  its log was not read.
+  `{job, step, first_error, history}`; the pack cannot tell which of them gate
+  the run. `first_error` is the failing step's first error line, or `null`
+  when its log was not read.
+  - `history` is that job's own verdict, against the job of the same name in
+    the window's other failed runs: `{verdict, count, runIds, firstSeen,
+    lastSeen, notCompared, why}`.
+  - `verdict` is `new`, `flaky`, `recurring` or `unknown`. `unknown` means the
+    comparison could not be made, never that the failure is new. `why` says
+    which side was missing (`own_log_not_read`, `history_not_compared`), and
+    `notCompared` counts the failed runs it could not compare.
 - **`errors`:** at most 40 strings, the error lines of the triaged job, the
   failing step's first.
 - **`history`:** `{signature, count, window, verdict, firstSeen, lastSeen,
-  runIds}`, or `null` when the run's log could not be read and the cache does
-  not know it, or when the run failed before any job ran. A run that failed
+  runIds}` of the run's one failed job. It is `null` when several jobs failed
+  (no one verdict stands for them: each has its own, and the summary counts
+  them), when that job's verdict is `unknown`, or when the run failed before
+  any job ran. A run that failed
   and then passed on "Re-run jobs" still counts its failure.
   - `firstSeen` and `lastSeen` are `{runId, commit, createdAt}`.
   - `verdict` is `new`, `flaky` or `recurring`.
@@ -100,7 +109,8 @@ summary's declared length allows for the report's 500 and these 300).
 - cache hits;
 - whether the `max_logs` cap stopped a log being read. The run's own jobs
   take at most half of `max_logs` (the triaged job's log always), so the
-  history gets the rest, and a later call reads on from the cache. With
+  history gets the rest, each failed job's history read in turn, and a later
+  call reads on from the cache. With
   `max_logs` 1 that one log is the triaged job's;
 - whether the history was rebuilt, because the cache was made with another
   failure-signature algorithm.
@@ -125,9 +135,10 @@ The summary ends with the gaps when there are any.
   ch-step-dedupe, which only tells branches apart) and of step names over
   200 characters, so neither a part nor the cache holds a hash of a name
   that can be guessed and checked.
-- Each cached run records the failure-signature algorithm that signed it, as
-  ch-step-failure-signature names it. A run signed by another algorithm, or
-  cached before the field, would never match, so it is read again within
+- Each cached job records the failure-signature algorithm that signed it, as
+  ch-step-failure-signature names it, under the pack's keyed hash of the job's
+  name. A job signed by another algorithm, or a cache from before jobs were
+  kept apart, would never match, so it is read again within
   `max_logs`; `historyRebuilt` is then true, and the summary says so. Expired
   logs stay remembered, whatever the algorithm.
 

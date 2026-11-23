@@ -11,7 +11,7 @@ const {readCache, writeCache} = require('../lib/cache');
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'ch-triage-'));
 const fileOf = (root) => path.join(root, 'acme__widgets', 'fingerprints.json');
-const seed = (root, runs) => { fs.mkdirSync(path.dirname(fileOf(root)), {recursive: true}); fs.writeFileSync(fileOf(root), JSON.stringify({version: 1, runs})); };
+const seed = (root, runs) => { fs.mkdirSync(path.dirname(fileOf(root)), {recursive: true}); fs.writeFileSync(fileOf(root), JSON.stringify({version: 2, runs})); };
 
 test('a raw step is hashed through writeCache\'s merge, never by a read: another writer\'s entries survive', () => {
   const root = tmp();
@@ -48,7 +48,7 @@ test('a cache write whose cleanup fails costs nothing: no throw', () => {
 // never written over; one that can't be parsed, or is another version's,
 // is moved aside and a fresh one started (never caching off for good)
 test('a cache that cannot be read now is left alone; one that cannot be parsed is moved aside and started afresh', () => {
-  for (const make of [(root) => fs.writeFileSync(fileOf(root), '{not json'), (root) => fs.writeFileSync(fileOf(root), JSON.stringify({version: 2, runs: {1: {jobId: 1}}}))]) {
+  for (const make of [(root) => fs.writeFileSync(fileOf(root), '{not json'), (root) => fs.writeFileSync(fileOf(root), JSON.stringify({version: 99, runs: {1: {jobId: 1}}}))]) {
     const root = tmp();
     seed(root, {});
     make(root);

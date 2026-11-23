@@ -137,12 +137,126 @@
                             "null"
                           ],
                           "maxLength": 500
+                        },
+                        "history": {
+                          "title": "this job's verdict against the jobs of its name in the window's other runs that did not pass: new means no job of this name failed the same way; unknown means the comparison could not be made, so it may still be a repeat",
+                          "type": "object",
+                          "properties": {
+                            "verdict": {
+                              "type": "string",
+                              "enum": [
+                                "new",
+                                "flaky",
+                                "recurring",
+                                "unknown"
+                              ]
+                            },
+                            "count": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "runIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "maxLength": 32
+                              },
+                              "maxItems": 1000
+                            },
+                            "firstSeen": {
+                              "anyOf": [
+                                {
+                                  "type": "null"
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "runId": {
+                                      "type": "string",
+                                      "maxLength": 32
+                                    },
+                                    "commit": {
+                                      "type": "string",
+                                      "maxLength": 64
+                                    },
+                                    "createdAt": {
+                                      "type": "string",
+                                      "maxLength": 40
+                                    }
+                                  },
+                                  "required": [
+                                    "runId",
+                                    "commit",
+                                    "createdAt"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            },
+                            "lastSeen": {
+                              "anyOf": [
+                                {
+                                  "type": "null"
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "runId": {
+                                      "type": "string",
+                                      "maxLength": 32
+                                    },
+                                    "commit": {
+                                      "type": "string",
+                                      "maxLength": 64
+                                    },
+                                    "createdAt": {
+                                      "type": "string",
+                                      "maxLength": 40
+                                    }
+                                  },
+                                  "required": [
+                                    "runId",
+                                    "commit",
+                                    "createdAt"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            },
+                            "notCompared": {
+                              "title": "runs in the window with a job of this name, or whose jobs could not be listed, that could not be compared",
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "why": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "own_log_not_read",
+                                "history_not_compared",
+                                null
+                              ]
+                            }
+                          },
+                          "required": [
+                            "verdict",
+                            "count",
+                            "runIds",
+                            "firstSeen",
+                            "lastSeen",
+                            "notCompared",
+                            "why"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
                         "job",
                         "step",
-                        "first_error"
+                        "first_error",
+                        "history"
                       ],
                       "additionalProperties": false
                     }
