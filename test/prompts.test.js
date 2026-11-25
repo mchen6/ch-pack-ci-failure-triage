@@ -1,9 +1,8 @@
 'use strict';
 require('./tmp-dirs');
-// The pack's example prompts (A-firstrun (c), the first-run design approved
-// 11-20): four, each asking only what ci_failure_triage does, in the exact
-// words business checked (ch-business tech/plans/2026-11-20-a-firstrun-ownuse-plan.md).
-// A change to any of them is a change to checked text: business reads it again.
+// The pack's example prompts: four, each asking only what ci_failure_triage
+// does, in the exact words that were checked. A change to any of them is a
+// change to checked text: it is read again.
 const test = require('node:test');
 const assert = require('node:assert');
 const Ajv2020 = require('ajv/dist/2020');
