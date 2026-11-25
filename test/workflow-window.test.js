@@ -2,8 +2,8 @@
 require('./tmp-dirs');
 // Which runs are the triaged run's workflow: the same workflowId; by the same
 // name only when an id is missing on either side; a run with neither is its
-// own window, never "new" and never matched. (ch-access-github's newer listRuns
-// is stood in for: workflow "" for a nameless run, branch null, workflowId.)
+// own window, never "new" and never matched. (Here what listRuns gives is said
+// by each run; the last test takes it from the pinned listRuns itself.)
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -17,7 +17,7 @@ const {triage} = require('../lib/chain');
 const validOutput = new Ajv2020({strict: false, allErrors: true}).compile(require('../schema.json').triageService.ci_failure_triage.output);
 const FAIL = (name) => runnerLog('Run npm test', [`✖ ${name} (1ms)`, '  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:', '  1 !== 2']);
 let nextJob = 1000;
-// as: {workflow, workflowId?, branch?}, as listRuns gives them; a run given none of it is of today's shape
+// as: {workflow, workflowId?, branch?}, as listRuns gives them; a run given none of it has no workflowId, as an older listRuns gave
 const run = (id, as, {conclusion = 'failure', test: name = 't one'} = {}) => ({id, conclusion, at: `2026-11-10T00:${String(id).padStart(2, '0')}:00Z`, branch: 'b', as,
   jobs: conclusion === 'success' ? [] : [{id: nextJob++, name: 'test', step: 'Test', log: FAIL(name)}]});
 const go = async(runs, input = {}, {gh = world({runs}), wrap = (ctx) => ctx, dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ch-window-'))} = {}) => {
@@ -99,7 +99,7 @@ test('a run whose branch is null is triaged, and is in the window of one that ha
 });
 
 test('the run-not-failed coverage counts the same window', async() => {
-  const output = await go([run(3, {workflow: 'Build', workflowId: '7'}, {conclusion: 'success'}), run(2, CI), run(1, CI), run(0, {workflow: 'Build', workflowId: '8'})], {runId: '3'});
+  const output = await go([run(4, {workflow: 'Build', workflowId: '7'}, {conclusion: 'success'}), run(3, CI), run(2, CI), run(1, {workflow: 'Build', workflowId: '8'})], {runId: '4'});
   assert.strictEqual(output.status, 'run-not-failed');
   assert.deepStrictEqual([output.coverage.runsListed, output.coverage.failedRuns], [3, 2]);
 });
@@ -208,4 +208,18 @@ for (const [what, change] of [
 test('a success that cannot be placed and was re-run, its attempt before never read: not compared', async() => {
   const output = await go([run(2, CI), run(1, {workflow: '', attempt: 2}, {conclusion: 'success'})]);
   assert.deepStrictEqual([verdict(output), output.failed_jobs[0].history.notCompared], ['unknown', 1]);
+});
+
+// through the pinned listRuns and GitHub's own answer: the id, not the name, makes the window
+test('a renamed workflow keeps its window, and two workflows of one name do not share one, through the pinned listRuns', async() => {
+  const answer = async(runs) => {
+    const output = await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: false}, makeCtx(world({runs})), {dataRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'ch-window-'))});
+    assert.ok(validOutput(output), JSON.stringify(validOutput.errors));
+    return output;
+  };
+  const at = (id, workflow, workflowId) => ({...run(id, {}), workflow, workflowId});
+  const renamed = await answer([at(3, 'Build', 7), at(2, 'Build (old name)', 7), at(1, 'Other', 8)]);
+  assert.deepStrictEqual([verdict(renamed), ids(renamed), renamed.coverage.runsListed], ['recurring', ['2', '3'], 2]);
+  const two = await answer([at(3, 'CI', 7), at(2, 'CI', 8), at(1, 'CI', 7)]);
+  assert.deepStrictEqual([verdict(two), ids(two), two.coverage.runsListed], ['recurring', ['1', '3'], 2]);
 });

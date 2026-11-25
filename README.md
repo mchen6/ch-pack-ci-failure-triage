@@ -38,6 +38,9 @@ the failure reach it.
   default: the newest failed run),
   `repo`, `window` (default 50 runs), `max_logs` (default 20 logs per
   call), `owner_hint` (default true; false leaves the logins out).
+  `run_id` is one of the repository's last `window` runs (default 50, at
+  most 100): an older run is refused (`RUN_NOT_FOUND`). In a repository with
+  many runs, a failure can leave that window within hours.
 
 **What it returns** (declared in `schema.json` as a closed object of one of
 three shapes). The triage result has exactly these fields:

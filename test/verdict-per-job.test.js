@@ -352,21 +352,23 @@ const recurs = (output, what) => {
 };
 
 // 1. A failure the cache knows is not forgotten when its run is re-run.
-test('a known failure is not forgotten while its run is re-run, when that is cancelled, or after it passes', async() => {
+// (both as GitHub sends it, the re-run a later attempt, and with no attempt numbers, as an older listRuns gave them)
+const both = (name, body) => { for (const given of [false, true]) test(`${name} (${given ? 'attempt numbers' : 'no attempt numbers'})`, () => body((r, n) => (given ? {...r, attempt: n} : r))); };
+both('a known failure is not forgotten while its run is re-run, when that is cancelled, or after it passes', async(a) => {
   const dataRoot = tmp();
-  recurs((await go(world({runs: [target(), failedBefore()]}), {runId: '2'}, dataRoot)).output, 'both failed');
-  recurs((await go(world({runs: [target(), run(1, 10, [], {conclusion: null})]}), {runId: '2'}, dataRoot)).output, 're-running');
-  recurs((await go(world({runs: [target(), run(1, 10, [], {conclusion: 'cancelled'})]}), {runId: '2'}, dataRoot)).output, 're-run cancelled');
-  const {output} = await go(world({runs: [target(), ok(1, 10)]}), {runId: '2'}, dataRoot);
+  recurs((await go(world({runs: [a(target(), 1), a(failedBefore(), 1)]}), {runId: '2'}, dataRoot)).output, 'both failed');
+  recurs((await go(world({runs: [a(target(), 1), a(run(1, 10, [], {conclusion: null}), 2)]}), {runId: '2'}, dataRoot)).output, 're-running');
+  recurs((await go(world({runs: [a(target(), 1), a(run(1, 10, [], {conclusion: 'cancelled'}), 2)]}), {runId: '2'}, dataRoot)).output, 're-run cancelled');
+  const {output} = await go(world({runs: [a(target(), 1), a(ok(1, 10), 3)]}), {runId: '2'}, dataRoot);
   const h = byName(output).test;
   assert.deepStrictEqual([h.verdict, h.runIds], ['flaky', ['1', '2']], 're-run passed');
 });
 
-test('the newest failed run re-run and asked again: the run before it is still compared with it', async() => {
+both('the newest failed run re-run and asked again: the run before it is still compared with it', async(a) => {
   const dataRoot = tmp();
-  const before = () => run(2, 20, [job('test', FAIL('t one'))]);
-  await go(world({runs: [run(3, 30, [job('test', FAIL('t one'))]), before()]}), {}, dataRoot);
-  const {output} = await go(world({runs: [run(3, 30, [], {conclusion: null}), before()]}), {}, dataRoot);
+  const before = () => a(run(2, 20, [job('test', FAIL('t one'))]), 1);
+  await go(world({runs: [a(run(3, 30, [job('test', FAIL('t one'))]), 1), before()]}), {}, dataRoot);
+  const {output} = await go(world({runs: [a(run(3, 30, [], {conclusion: null}), 2), before()]}), {}, dataRoot);
   assert.strictEqual(output.run.id, '2');
   assert.deepStrictEqual([byName(output).test.verdict, byName(output).test.runIds], ['recurring', ['2', '3']]);
 });
@@ -379,61 +381,61 @@ test('a re-run that failed another job: its first attempt\'s failure still count
   recurs(await attempted(rerun(), {1: 2}, dataRoot), 'the next call');
 });
 
-test('a run triaged itself after its re-run keeps its first attempt\'s failure', async() => {
+both('a run triaged itself after its re-run keeps its first attempt\'s failure', async(a) => {
   const dataRoot = tmp();
-  await go(world({runs: [failedBefore()]}), {runId: '1'}, dataRoot);
-  await go(world({runs: [run(1, 10, [job('lint', FMT)], {conclusion: 'timed_out'})]}), {runId: '1'}, dataRoot);
-  recurs((await go(world({runs: [target(), run(1, 10, [job('lint', FMT)], {conclusion: 'timed_out'})]}), {runId: '2'}, dataRoot)).output);
+  await go(world({runs: [a(failedBefore(), 1)]}), {runId: '1'}, dataRoot);
+  await go(world({runs: [a(run(1, 10, [job('lint', FMT)], {conclusion: 'timed_out'}), 2)]}), {runId: '1'}, dataRoot);
+  recurs((await go(world({runs: [a(target(), 1), a(run(1, 10, [job('lint', FMT)], {conclusion: 'timed_out'}), 2)]}), {runId: '2'}, dataRoot)).output);
 });
 
-test('a failed run that passed on its re-run, then triaged by run_id for a continue-on-error job: its failure still counts', async() => {
+both('a failed run that passed on its re-run, then triaged by run_id for a continue-on-error job: its failure still counts', async(a) => {
   const dataRoot = tmp();
-  await go(world({runs: [failedBefore()]}), {runId: '1'}, dataRoot);
-  await go(world({runs: [run(1, 10, [job('lint', FMT)], {conclusion: 'success'})]}), {runId: '1'}, dataRoot);
-  const {output} = await go(world({runs: [target(), ok(1, 10)]}), {runId: '2'}, dataRoot);
+  await go(world({runs: [a(failedBefore(), 1)]}), {runId: '1'}, dataRoot);
+  await go(world({runs: [a(run(1, 10, [job('lint', FMT)], {conclusion: 'success'}), 2)]}), {runId: '1'}, dataRoot);
+  const {output} = await go(world({runs: [a(target(), 1), a(ok(1, 10), 2)]}), {runId: '2'}, dataRoot);
   assert.deepStrictEqual([byName(output).test.verdict, byName(output).test.runIds], ['flaky', ['1', '2']]);
 });
 
-test('a cancelled run\'s failure still counts after its re-run passed', async() => {
+both('a cancelled run\'s failure still counts after its re-run passed', async(a) => {
   const dataRoot = tmp();
-  recurs((await go(world({runs: [target(), run(1, 10, [job('test', FAIL('t one'))], {conclusion: 'cancelled'})]}), {runId: '2'}, dataRoot)).output);
-  const {output} = await go(world({runs: [target(), ok(1, 10)]}), {runId: '2'}, dataRoot);
+  recurs((await go(world({runs: [a(target(), 1), a(run(1, 10, [job('test', FAIL('t one'))], {conclusion: 'cancelled'}), 1)]}), {runId: '2'}, dataRoot)).output);
+  const {output} = await go(world({runs: [a(target(), 1), a(ok(1, 10), 2)]}), {runId: '2'}, dataRoot);
   assert.deepStrictEqual([byName(output).test.verdict, byName(output).test.runIds], ['flaky', ['1', '2']]);
 });
 
-test('a re-run now without any failed job keeps its earlier list, and a re-run whose jobs cannot be listed still matches it', async() => {
+both('a re-run now without any failed job keeps its earlier list, and a re-run whose jobs cannot be listed still matches it', async(a) => {
   const dataRoot = tmp();
-  await go(world({runs: [target(), failedBefore()]}), {runId: '2'}, dataRoot);
-  recurs((await go(world({runs: [target(), run(1, 10, [], {conclusion: 'startup_failure'})]}), {runId: '2'}, dataRoot)).output, 'no failed job');
-  const inner = world({runs: [target(), run(1, 10, [], {conclusion: null})]});
+  await go(world({runs: [a(target(), 1), a(failedBefore(), 1)]}), {runId: '2'}, dataRoot);
+  recurs((await go(world({runs: [a(target(), 1), a(run(1, 10, [], {conclusion: 'startup_failure'}), 2)]}), {runId: '2'}, dataRoot)).output, 'no failed job');
+  const inner = world({runs: [a(target(), 1), a(run(1, 10, [], {conclusion: null}), 3)]});
   const refusing = (tool, args) => (tool === 'actions_list' && args.method === 'list_workflow_jobs' && args.resource_id === '1' ? {isError: true, content: [{type: 'text', text: 'server error'}]} : inner(tool, args));
   recurs((await go(refusing, {runId: '2'}, dataRoot)).output, 'not listed');
 });
 
-test('a list taken again in the middle of a call is compared in that call', async() => {
+both('a list taken again in the middle of a call is compared in that call', async(a) => {
   const dataRoot = tmp();
-  const both = () => run(3, 30, [job('a', FAIL('t a')), job('b', FAIL('t b'))]);
+  const both = () => a(run(3, 30, [job('a', FAIL('t a')), job('b', FAIL('t b'))]), 1);
   // run 1's list is cached, its job's log is not read
-  await go(world({runs: [both(), run(1, 10, [job('a', FAIL('t a'))])]}), {runId: '3', maxLogs: 1}, dataRoot);
+  await go(world({runs: [both(), a(run(1, 10, [job('a', FAIL('t a'))]), 1)]}), {runId: '3', maxLogs: 1}, dataRoot);
   // re-run since: it fails b, as the target's
-  const {output} = await go(world({runs: [both(), run(1, 10, [job('b', FAIL('t b'))])]}), {runId: '3'}, dataRoot);
+  const {output} = await go(world({runs: [both(), a(run(1, 10, [job('b', FAIL('t b'))]), 2)]}), {runId: '3'}, dataRoot);
   const h = byName(output);
   assert.strictEqual(h.b.verdict, 'recurring');
   assert.strictEqual(h.a.verdict, 'unknown', 'the first attempt failed a, and its log was never read');
 });
 
-test('an earlier attempt\'s job that was never read is not looked for on every call, and starves no other run', async() => {
+both('an earlier attempt\'s job that was never read is not looked for on every call, and starves no other run', async(a) => {
   const dataRoot = tmp();
   const unread = (id, m) => run(id, m, [job('test', FAIL('t other'))]);
-  const three = [target, () => unread(8, 18), () => unread(7, 17)];
-  const oldest = run(1, 10, [job('test', FAIL('t one'))]);
+  const three = [() => a(target(), 1), () => a(unread(8, 18), 1), () => a(unread(7, 17), 1)];
+  const oldest = a(run(1, 10, [job('test', FAIL('t one'))]), 1);
   const lists = (gh) => gh.seen.filter((x) => x.tool === 'actions_list' && x.args.method === 'list_workflow_jobs').map((x) => x.args.resource_id);
   // every run's list is cached, no log of theirs read
   await go(world({runs: [...three.map((f) => f()), oldest]}), {runId: '2', maxLogs: 1}, dataRoot);
   await go(world({runs: [...three.map((f) => f()), oldest]}), {runId: '2', maxLogs: 1}, dataRoot);
   await go(world({runs: [...three.map((f) => f()), oldest]}), {runId: '2', maxLogs: 1}, dataRoot);
   // 8 and 7 are re-run and fail another job; their first attempts' "test" is gone
-  const later = () => world({runs: [target(), run(8, 18, [job('lint', FMT)], {conclusion: 'timed_out'}), run(7, 17, [job('lint', FMT)], {conclusion: 'timed_out'}), oldest]});
+  const later = () => world({runs: [a(target(), 1), a(run(8, 18, [job('lint', FMT)], {conclusion: 'timed_out'}), 2), a(run(7, 17, [job('lint', FMT)], {conclusion: 'timed_out'}), 2), oldest]});
   for (let n = 0; n < 2; n++) await go(later(), {runId: '2', maxLogs: 1}, dataRoot);
   const gh = later();
   const {output} = await go(gh, {runId: '2', maxLogs: 2}, dataRoot);
