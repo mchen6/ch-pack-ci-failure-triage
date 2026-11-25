@@ -515,12 +515,12 @@ test('a failure known under another name in a run that passed on its re-run is n
 });
 
 // 3. Runs that did not pass are not all failed runs.
-test('the runs it could not compare are not called failed runs', async() => {
+test('the runs it could not compare are not called failed runs, nor runs that did not pass', async() => {
   const runs = [run(50, 500, [job('test', FAIL('t one'))])];
   for (let i = 40; i >= 36; i--) runs.push(run(i, i * 10, [], {conclusion: 'cancelled'}));
   const {output} = await go(world({runs}), {runId: '50', maxLogs: 2});
   assert.strictEqual(output.coverage.failedRuns, 1);
-  assert.match(output.summary, /could not be told: 3 other runs that did not pass in the last 6 runs could not be compared/);
+  assert.match(output.summary, /could not be told: 3 other runs in the last 6 runs could not be compared/);
 });
 
 // 9. A job's runIds are the newest ten.
@@ -581,4 +581,32 @@ test('an old cache too deep to write back leaves no raw step name on disk, and c
   await go(world({runs: [target()]}), {runId: '2'}, dataRoot);
   for (const f of fs.readdirSync(dir)) assert.ok(!fs.readFileSync(path.join(dir, f), 'utf8').includes('raw-step-text'), f);
   assert.strictEqual(JSON.parse(fs.readFileSync(cacheFile(dataRoot), 'utf8')).version, 2);
+});
+
+// A success triaged for a job that failed in it is not compared with the other
+// successes (their jobs are never listed): not "new", nor flaky for one on its commit.
+test('a triaged success whose job fails in every success: it could not tell, never "new" or flaky', async() => {
+  const lint = (id, m, extra = {}) => run(id, m, [job('lint', FMT)], {conclusion: 'success', ...extra});
+  for (const extra of [{}, {sha: 'c'.repeat(40)}]) {
+    const {output} = await go(world({runs: [lint(3, 30, extra), lint(2, 20, extra), lint(1, 10)]}), {runId: '3'});
+    const h = byName(output).lint;
+    assert.deepStrictEqual([h.verdict, h.why, h.notCompared], ['unknown', 'history_not_compared', 2]);
+    assert.strictEqual(output.history, null);
+    assert.match(output.summary, /could not be told: 2 other runs in the last 3 runs could not be compared\./);
+  }
+});
+
+test('a triaged success: a match in a run that failed stands, and with no other success it is compared', async() => {
+  const lint = () => [job('lint', FMT)];
+  const matched = await go(world({runs: [run(3, 30, lint(), {conclusion: 'success'}), ok(2, 20), run(1, 10, lint())]}), {runId: '3'});
+  assert.deepStrictEqual([byName(matched.output).lint.count, byName(matched.output).lint.runIds], [2, ['1', '3']]);
+  const alone = await go(world({runs: [run(3, 30, lint(), {conclusion: 'success'}), run(1, 10, [job('test', FAIL('t one'))])]}), {runId: '3'});
+  assert.strictEqual(byName(alone.output).lint.verdict, 'new');
+});
+
+test('a window of one run: "in the last run"', async() => {
+  const one = await go(world({runs: [target()]}), {runId: '2'});
+  assert.match(one.output.summary, /did in the last run\. /);
+  const several = await go(world({runs: [run(2, 20, [job('a', FAIL('t a')), job('b', FAIL('t b'))])]}), {runId: '2'});
+  assert.match(several.output.summary, /by job name over the last run: 2 new; /);
 });

@@ -139,7 +139,7 @@
                           "maxLength": 500
                         },
                         "history": {
-                          "title": "this job's verdict against the jobs of its name in the window's other runs that did not pass: new means no job of this name failed the same way; unknown means the comparison could not be made, so it may still be a repeat",
+                          "title": "this job's verdict against the jobs of its name in the window's other runs that did not pass: new means no job of this name failed the same way; unknown means the comparison could not be made, or a job of another name failed the same way, so it may still be a repeat",
                           "type": "object",
                           "properties": {
                             "verdict": {
@@ -156,7 +156,7 @@
                               "minimum": 0
                             },
                             "runIds": {
-                              "title": "the newest runs it failed the same way in, oldest first, at most 10; count has them all",
+                              "title": "up to 10 of the newest runs it failed the same way in, listed oldest first; count has them all",
                               "type": "array",
                               "items": {
                                 "type": "string",
