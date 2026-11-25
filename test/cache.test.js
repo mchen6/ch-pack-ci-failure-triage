@@ -143,3 +143,27 @@ test('a no-jobs entry mixed with a signed or expired entry\'s fields is dropped'
   fs.writeFileSync(path.join(root, 'acme__widgets', 'fingerprints.json'), JSON.stringify({version: readCache('acme/widgets', fs.mkdtempSync(path.join(os.tmpdir(), 'ch-cache-v-'))).version, runs}), {mode: 0o600});
   assert.deepStrictEqual(Object.keys(readCache('acme/widgets', root).runs), ['1']);
 });
+
+test('a job\'s entry with a run list\'s field is dropped on read', () => {
+  const root = tmp();
+  const signed = {jobId: 1, signature: 'a'.repeat(64), algorithm: null, step: null, commit: 'c', createdAt: 't', errorLineHashes: []};
+  seed(root, {'1/1': signed, '1/2': {...signed, lost: true}, '1/3': {...signed, notFailed: true}});
+  assert.deepStrictEqual(Object.keys(readCache('acme/widgets', root).runs), ['1/1']);
+});
+
+// A run's list is written beside what another launcher, or a call whose first
+// read failed, knew the run failed before: never over it.
+test('a run\'s list written over another: the jobs it failed before stay', () => {
+  const list = (pairs, extra = {}) => ({failedJobs: pairs, keyId: '0'.repeat(8), conclusion: 'failure', commit: 'c', createdAt: 't', ...extra});
+  const A = ['a'.repeat(64), '1'];
+  const B = ['b'.repeat(64), '2'];
+  const after = (before, entry) => { const root = tmp(); seed(root, {1: before}); assert.strictEqual(writeCache('acme/widgets', {1: entry}, root), true); return readCache('acme/widgets', root).runs[1]; };
+  assert.deepStrictEqual(after(list([A]), list([B])), list([B, A], {earlier: ['1']}));
+  assert.deepStrictEqual(after(list([A]), list([A, B])), list([A, B]), 'the same attempt');
+  assert.deepStrictEqual(after(list([B, A], {earlier: ['1']}), list([B])), list([B, A], {earlier: ['1']}));
+  assert.deepStrictEqual(after(list([A]), list([B], {keyId: '1'.repeat(8)})), list([B], {keyId: '1'.repeat(8), lost: true}), 'another key');
+  assert.deepStrictEqual(after(list([A]), list([A], {keyId: '1'.repeat(8)})), list([A], {keyId: '1'.repeat(8)}), 'another key, the same jobs');
+  assert.deepStrictEqual(after(list([A]), list([B], {conclusion: 'success', notFailed: true})), list([A]), 'a success never over a failure');
+  assert.deepStrictEqual(after(list([A], {notFailed: true, conclusion: 'success'}), list([B])), list([B]), 'a success\'s list is no failure');
+  assert.deepStrictEqual(after(list([A]), {noJobs: true, conclusion: 'startup_failure', commit: 'c', createdAt: 't'}), list([A], {conclusion: 'startup_failure', earlier: ['1']}));
+});
