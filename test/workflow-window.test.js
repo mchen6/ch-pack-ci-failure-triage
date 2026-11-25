@@ -185,18 +185,27 @@ test('a success that cannot be placed, known to have failed this job before its 
   }
 });
 
-test('a success that cannot be placed, whose failed jobs the cache has under another key: not compared', async() => {
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ch-window-'));
-  const before = run(1, {workflow: ''});
-  await go([before], {}, {dataRoot});
-  const files = fs.readdirSync(dataRoot, {recursive: true}).map((f) => path.join(dataRoot, String(f))).filter((f) => f.endsWith('.json') && fs.readFileSync(f, 'utf8').includes('"failedJobs"'));
-  assert.strictEqual(files.length, 1, files.join());
-  const cached = JSON.parse(fs.readFileSync(files[0], 'utf8'));
-  const entry = Object.values(cached.runs).find((e) => Array.isArray(e.failedJobs) && e.failedJobs.length > 0);
-  entry.keyId = entry.keyId === '00000000' ? 'ffffffff' : '00000000';
+for (const [what, change] of [
   // (its names are that key's: none is this one's)
-  entry.failedJobs = entry.failedJobs.map(([, id]) => ['0'.repeat(64), id]);
-  fs.writeFileSync(files[0], JSON.stringify(cached));
-  const output = await go([run(2, CI), {...before, conclusion: 'success', jobs: []}], {}, {dataRoot});
+  ['under another key', (e) => { e.keyId = e.keyId === '00000000' ? 'ffffffff' : '00000000'; e.failedJobs = e.failedJobs.map(([, id]) => ['0'.repeat(64), id]); }],
+  // (what an earlier list under another key held, this one does not say)
+  ['with some lost', (e) => { e.lost = true; e.failedJobs = e.failedJobs.map(([, id]) => ['0'.repeat(64), id]); }]
+]) {
+  test(`a success that cannot be placed, whose failed jobs the cache has ${what}: not compared`, async() => {
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ch-window-'));
+    const before = run(1, {workflow: ''});
+    await go([before], {}, {dataRoot});
+    const files = fs.readdirSync(dataRoot, {recursive: true}).map((f) => path.join(dataRoot, String(f))).filter((f) => f.endsWith('.json') && fs.readFileSync(f, 'utf8').includes('"failedJobs"'));
+    assert.strictEqual(files.length, 1, files.join());
+    const cached = JSON.parse(fs.readFileSync(files[0], 'utf8'));
+    change(Object.values(cached.runs).find((e) => Array.isArray(e.failedJobs) && e.failedJobs.length > 0));
+    fs.writeFileSync(files[0], JSON.stringify(cached));
+    const output = await go([run(2, CI), {...before, conclusion: 'success', jobs: []}], {}, {dataRoot});
+    assert.deepStrictEqual([verdict(output), output.failed_jobs[0].history.notCompared], ['unknown', 1]);
+  });
+}
+
+test('a success that cannot be placed and was re-run, its attempt before never read: not compared', async() => {
+  const output = await go([run(2, CI), run(1, {workflow: '', attempt: 2}, {conclusion: 'success'})]);
   assert.deepStrictEqual([verdict(output), output.failed_jobs[0].history.notCompared], ['unknown', 1]);
 });

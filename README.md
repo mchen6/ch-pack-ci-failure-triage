@@ -61,8 +61,9 @@ three shapes). The triage result has exactly these fields:
     another name is known to have failed the same way
     (`seen_under_another_job_name`). Only runs that did not pass are listed,
     so when the triaged run is itself a success, the window's other successes
-    could not be compared. A run that did not pass and whose workflow can't
-    be told counts as not compared, so it never makes a failure new.
+    could not be compared. A run that passed on a re-run counts as not compared
+    too, unless what it failed before was read. A run that did not pass and whose
+    workflow can't be told counts as not compared, so it never makes a failure new.
 - **`errors`:** at most 40 error lines of the triaged job, the failing step's
   first. The expected and actual values it finds for a failed assertion follow
   its line; a format it does not recognise gives none. The values have one
