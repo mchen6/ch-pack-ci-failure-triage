@@ -10,7 +10,7 @@ const theirs = require('@countinghouse/ch-step-report/handlers/reportService/ass
 test('the pack\'s address check answers as ch-step-report\'s', () => {
   const probes = ['bob@corp.example', 'ssh://git@github.com/o/r.git', 'postgres://svc@corp.com:hunter2@db/app', 'https://alice@corp.com@nexus/r',
     'git@github.com:o/r.git', 'react@16.8.0', 'https://<basicAuth>@github.com/o/r', 'bob%40corp.com%26', '\x1b[31mbob@corp.com\x1b[0m',
-    'bob＠corp.example', 'see <b>@evil.com', 'Deploy to prod', 'mailto:git@corp.example', 'bob@corp.भारत',
+    'bob\uff20corp.example', 'see <b>@evil.com', 'Deploy to prod', 'mailto:git@corp.example', 'bob@corp.\u092d\u093e\u0930\u0924',
     // (the final pass, A3: an image digest, and hex that is none)
     `node:20-slim@sha256:${'a3' + '9f'.repeat(31)}: not found`, `svc@sha256:${'a3' + '9f'.repeat(31)}z`];
   for (const p of probes) assert.strictEqual(mine.hasAddress(p), theirs.hasAddress(p), p);
