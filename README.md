@@ -61,7 +61,8 @@ three shapes). The triage result has exactly these fields:
     another name is known to have failed the same way
     (`seen_under_another_job_name`). Only runs that did not pass are listed,
     so when the triaged run is itself a success, the window's other successes
-    could not be compared.
+    could not be compared. A run that did not pass and whose workflow can't
+    be told counts as not compared, so it never makes a failure new.
 - **`errors`:** at most 40 error lines of the triaged job, the failing step's
   first. The expected and actual values it finds for a failed assertion follow
   its line; a format it does not recognise gives none. The values have one
@@ -120,7 +121,10 @@ summary's declared length allows for the report's 500 and these 300).
 
 **Coverage, stated, never hidden:**
 - runs considered (the failing run's workflow only, so a Pages deploy is not
-  in a CI window). A failed run is one that failed, timed out or failed to
+  in a CI window). A run's window is the runs of the same workflow, by
+  GitHub's workflow id where it gives one, else by the same name. A renamed
+  workflow keeps its window where GitHub gives the id; a moved workflow file
+  may start a new one. A failed run is one that failed, timed out or failed to
   start;
 - failed runs;
 - logs fetched;

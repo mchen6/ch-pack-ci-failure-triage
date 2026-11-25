@@ -225,12 +225,12 @@
                               ]
                             },
                             "notCompared": {
-                              "title": "runs in the window that could not be compared with this job: their job of this name could not be read or has no usable signature, or their jobs were not or could not be listed",
+                              "title": "runs that could not be compared with this job: their job of this name could not be read or has no usable signature, or their jobs were not or could not be listed, or they did not pass and their workflow can't be told",
                               "type": "integer",
                               "minimum": 0
                             },
                             "why": {
-                              "title": "why the verdict is unknown, else null: own_log_not_read (this job's own log could not be read), history_not_compared (notCompared says how many runs), seen_under_another_job_name (no job of this name failed the same way, but a job of another name did, so it may be a repeat)",
+                              "title": "why the verdict is unknown, else null: own_log_not_read (this job's own log could not be read), history_not_compared (notCompared says how many runs; 0 when no run is known to be of its workflow, or this job's log gave no usable signature), seen_under_another_job_name (no job of this name failed the same way, but a job of another name did, so it may be a repeat)",
                               "type": [
                                 "string",
                                 "null"
