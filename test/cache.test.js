@@ -11,7 +11,7 @@ const {readCache, writeCache} = require('../lib/cache');
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'ch-triage-'));
 const fileOf = (root) => path.join(root, 'acme__widgets', 'fingerprints.json');
-const seed = (root, runs) => { fs.mkdirSync(path.dirname(fileOf(root)), {recursive: true}); fs.writeFileSync(fileOf(root), JSON.stringify({version: 1, runs})); };
+const seed = (root, runs) => { fs.mkdirSync(path.dirname(fileOf(root)), {recursive: true}); fs.writeFileSync(fileOf(root), JSON.stringify({version: 2, runs})); };
 
 test('a raw step is hashed through writeCache\'s merge, never by a read: another writer\'s entries survive', () => {
   const root = tmp();
@@ -48,7 +48,7 @@ test('a cache write whose cleanup fails costs nothing: no throw', () => {
 // never written over; one that can't be parsed, or is another version's,
 // is moved aside and a fresh one started (never caching off for good)
 test('a cache that cannot be read now is left alone; one that cannot be parsed is moved aside and started afresh', () => {
-  for (const make of [(root) => fs.writeFileSync(fileOf(root), '{not json'), (root) => fs.writeFileSync(fileOf(root), JSON.stringify({version: 2, runs: {1: {jobId: 1}}}))]) {
+  for (const make of [(root) => fs.writeFileSync(fileOf(root), '{not json'), (root) => fs.writeFileSync(fileOf(root), JSON.stringify({version: 99, runs: {1: {jobId: 1}}}))]) {
     const root = tmp();
     seed(root, {});
     make(root);
@@ -142,4 +142,45 @@ test('a no-jobs entry mixed with a signed or expired entry\'s fields is dropped'
   fs.mkdirSync(path.join(root, 'acme__widgets'), {recursive: true});
   fs.writeFileSync(path.join(root, 'acme__widgets', 'fingerprints.json'), JSON.stringify({version: readCache('acme/widgets', fs.mkdtempSync(path.join(os.tmpdir(), 'ch-cache-v-'))).version, runs}), {mode: 0o600});
   assert.deepStrictEqual(Object.keys(readCache('acme/widgets', root).runs), ['1']);
+});
+
+test('a job\'s entry with a run list\'s field is dropped on read', () => {
+  const root = tmp();
+  const signed = {jobId: 1, signature: 'a'.repeat(64), algorithm: null, step: null, commit: 'c', createdAt: 't', errorLineHashes: []};
+  seed(root, {'1/1': signed, '1/2': {...signed, lost: true}, '1/3': {...signed, notFailed: true}, '1/4': {...signed, earlier: []}, '1/5': {...signed, unsigned: true}});
+  assert.deepStrictEqual(Object.keys(readCache('acme/widgets', root).runs), ['1/1']);
+});
+
+// A run's list is written beside what another launcher, or a call whose first
+// read failed, knew the run failed before: never over it.
+test('a run\'s list written over another: the jobs it failed before stay', () => {
+  const list = (pairs, extra = {}) => ({failedJobs: pairs, keyId: '0'.repeat(8), conclusion: 'failure', commit: 'c', createdAt: 't', ...extra});
+  const A = ['a'.repeat(64), '1'];
+  const B = ['b'.repeat(64), '2'];
+  const after = (before, entry) => { const root = tmp(); seed(root, {1: before}); assert.strictEqual(writeCache('acme/widgets', {1: entry}, root), true); return readCache('acme/widgets', root).runs[1]; };
+  assert.deepStrictEqual(after(list([A]), list([B])), list([B, A], {earlier: ['1']}));
+  assert.deepStrictEqual(after(list([A]), list([A, B])), list([A, B]), 'the same attempt');
+  assert.deepStrictEqual(after(list([B, A], {earlier: ['1']}), list([B])), list([B, A], {earlier: ['1']}));
+  assert.deepStrictEqual(after(list([A]), list([B], {keyId: '1'.repeat(8)})), list([B], {keyId: '1'.repeat(8), lost: true}), 'another key');
+  assert.deepStrictEqual(after(list([A]), list([A], {keyId: '1'.repeat(8)})), list([A], {keyId: '1'.repeat(8)}), 'another key, the same jobs');
+  assert.deepStrictEqual(after(list([A]), list([B], {conclusion: 'success', notFailed: true})), list([A]), 'a success never over a failure');
+  assert.deepStrictEqual(after(list([A], {notFailed: true, conclusion: 'success'}), list([B])), list([B]), 'a success\'s list is no failure');
+  assert.deepStrictEqual(after(list([A]), {noJobs: true, conclusion: 'startup_failure', commit: 'c', createdAt: 't'}), list([A], {conclusion: 'startup_failure', earlier: ['1']}));
+});
+
+// (two writers of one process in one millisecond, as two threads can be)
+test('a cache write\'s temp file is its own', () => {
+  const root = tmp();
+  const {writeFileSync} = fs;
+  const now = Date.now;
+  const temps = [];
+  fs.writeFileSync = (file, ...rest) => { if (String(file).endsWith('.tmp')) temps.push(String(file)); return writeFileSync(file, ...rest); };
+  Date.now = () => 1;
+  try {
+    for (let n = 1; n <= 2; n++) assert.strictEqual(writeCache('acme/widgets', {[n]: {jobId: n, signature: 'a'.repeat(64), commit: 'c', createdAt: 't'}}, root), true);
+  } finally {
+    fs.writeFileSync = writeFileSync;
+    Date.now = now;
+  }
+  assert.strictEqual(new Set(temps).size, 2, temps.join());
 });

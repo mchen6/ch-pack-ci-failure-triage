@@ -17,6 +17,9 @@ function recordedServer() {
     seen.push({tool, args});
     if (tool === 'actions_list' && args.method === 'list_workflow_runs') return recorded('list_workflow_runs');
     if (tool === 'actions_list' && args.method === 'list_workflow_jobs' && args.resource_id === '42775507169') return recorded('list_workflow_jobs');
+    // (the recording's one failed run; any other run that did not pass, listed
+    // for its failed jobs, had none)
+    if (tool === 'actions_list' && args.method === 'list_workflow_jobs') return text({jobs: {total_count: 0, jobs: []}});
     if (tool === 'get_job_logs') return recorded(`get_job_logs-${args.job_id}`);
     if (tool === 'list_commits') return recorded('list_commits');
     throw new Error(`recorded server: no fixture for ${tool} ${JSON.stringify(args)}`);

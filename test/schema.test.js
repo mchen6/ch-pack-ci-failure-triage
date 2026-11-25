@@ -102,7 +102,7 @@ test('every field taken from the CI log or the workflow is labelled data, never 
   const lastSuccess = none.lastSuccess.anyOf ? none.lastSuccess.anyOf.find((s) => s.type === 'object').properties : none.lastSuccess.properties;
   const fields = {
     'run.branch': ok.run.properties.branch, 'run.workflow': ok.run.properties.workflow, 'run.job': ok.run.properties.job, 'run.step': ok.run.properties.step,
-    'failed_jobs[].job': items.job, 'failed_jobs[].step': items.step, 'failed_jobs[].first_error': items.first_error,
+    'failed_jobs[].job': items.job, 'failed_jobs[].step': items.step, 'failed_jobs[].first_error': items.first_error, 'failed_jobs[].values': items.values,
     errors: ok.errors, 'coverage.logsUnavailable[].job': ok.coverage.properties.logsUnavailable.items.properties.job,
     'lastSuccess.branch': lastSuccess.branch, 'lastSuccess.workflow': lastSuccess.workflow
   };
