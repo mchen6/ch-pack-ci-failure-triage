@@ -137,12 +137,129 @@
                             "null"
                           ],
                           "maxLength": 500
+                        },
+                        "history": {
+                          "title": "this job's verdict against the jobs of its name in the window's other runs that did not pass: new means no job of this name failed the same way in the runs compared; unknown means the comparison could not be made, or a job of another name failed the same way, so it may still be a repeat",
+                          "type": "object",
+                          "properties": {
+                            "verdict": {
+                              "type": "string",
+                              "enum": [
+                                "new",
+                                "flaky",
+                                "recurring",
+                                "unknown"
+                              ]
+                            },
+                            "count": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "runIds": {
+                              "title": "up to 10 of the newest runs it failed the same way in, listed oldest first; count has them all",
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "maxLength": 32
+                              },
+                              "maxItems": 10
+                            },
+                            "firstSeen": {
+                              "anyOf": [
+                                {
+                                  "type": "null"
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "runId": {
+                                      "type": "string",
+                                      "maxLength": 32
+                                    },
+                                    "commit": {
+                                      "type": "string",
+                                      "maxLength": 64
+                                    },
+                                    "createdAt": {
+                                      "type": "string",
+                                      "maxLength": 40
+                                    }
+                                  },
+                                  "required": [
+                                    "runId",
+                                    "commit",
+                                    "createdAt"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            },
+                            "lastSeen": {
+                              "anyOf": [
+                                {
+                                  "type": "null"
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "runId": {
+                                      "type": "string",
+                                      "maxLength": 32
+                                    },
+                                    "commit": {
+                                      "type": "string",
+                                      "maxLength": 64
+                                    },
+                                    "createdAt": {
+                                      "type": "string",
+                                      "maxLength": 40
+                                    }
+                                  },
+                                  "required": [
+                                    "runId",
+                                    "commit",
+                                    "createdAt"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            },
+                            "notCompared": {
+                              "title": "runs in the window that could not be compared with this job: their job of this name could not be read or has no usable signature, or their jobs were not or could not be listed",
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "why": {
+                              "title": "why the verdict is unknown, else null: own_log_not_read (this job's own log could not be read), history_not_compared (notCompared says how many runs), seen_under_another_job_name (no job of this name failed the same way, but a job of another name did, so it may be a repeat)",
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "own_log_not_read",
+                                "history_not_compared",
+                                "seen_under_another_job_name",
+                                null
+                              ]
+                            }
+                          },
+                          "required": [
+                            "verdict",
+                            "count",
+                            "runIds",
+                            "firstSeen",
+                            "lastSeen",
+                            "notCompared",
+                            "why"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
                         "job",
                         "step",
-                        "first_error"
+                        "first_error",
+                        "history"
                       ],
                       "additionalProperties": false
                     }
@@ -342,12 +459,12 @@
                     "minimum": 0
                   },
                   "capHit": {
-                    "title": "true when a bound stopped a log being read: max_logs logs fetched (the run's own jobs take at most half of them), or 50 logs unavailable",
+                    "title": "true when a bound stopped a log, or a run's list of failed jobs, being read: max_logs logs fetched (the run's own jobs take at most half of them), max_logs other runs' jobs listed, or 50 of either unavailable",
                     "type": "boolean"
                   },
                   "historyRebuilt": {
                     "type": "boolean",
-                    "description": "true when the cache was made with another signature algorithm or other error-extraction rules (or before it recorded them), and the history was read again"
+                    "description": "true when the cache, or part of it, was made with another signature algorithm, other error-extraction rules or another pack key, or by a version of the pack that kept it differently, and that history was read again"
                   }
                 },
                 "required": [
@@ -479,7 +596,7 @@
                     "minimum": 0
                   },
                   "capHit": {
-                    "title": "true when a bound stopped a log being read: max_logs logs fetched (the run's own jobs take at most half of them), or 50 logs unavailable",
+                    "title": "true when a bound stopped a log, or a run's list of failed jobs, being read: max_logs logs fetched (the run's own jobs take at most half of them), max_logs other runs' jobs listed, or 50 of either unavailable",
                     "type": "boolean"
                   },
                   "historyRebuilt": {
@@ -598,7 +715,7 @@
                     "minimum": 0
                   },
                   "capHit": {
-                    "title": "true when a bound stopped a log being read: max_logs logs fetched (the run's own jobs take at most half of them), or 50 logs unavailable",
+                    "title": "true when a bound stopped a log, or a run's list of failed jobs, being read: max_logs logs fetched (the run's own jobs take at most half of them), max_logs other runs' jobs listed, or 50 of either unavailable",
                     "type": "boolean"
                   },
                   "historyRebuilt": {
