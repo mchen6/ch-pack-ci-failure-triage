@@ -764,3 +764,75 @@ test('a success that was re-run unseen counts once when the triaged run is a suc
   const output = await attempted(world({runs: [run(2, 20, [job('test', FAIL('t one'))], {conclusion: 'success'}), ok(1, 10)]}), {1: 2}, tmp());
   assert.strictEqual(byName(output).test.notCompared, 1);
 });
+
+// ---- a log a part refuses (#24's high, 12) ----
+// (the history's, or another job's of the run: the triaged job's own errors are
+// the call's)
+const {ADDRESSES} = require('../lib/addresses');
+const refusing = (address, error) => (gh) => {
+  const ctx = makeCtx(gh);
+  const call = ctx.call;
+  ctx.call = async(a, i) => {
+    if (a === address && JSON.stringify(i).includes('poison')) throw error();
+    return call(a, i);
+  };
+  return ctx;
+};
+const coded = (code) => () => Object.assign(new Error('refused'), {code});
+const asked = async(ctx, input = {}) => {
+  const output = await triage({repo: 'acme/widgets', runId: '2', window: 50, maxLogs: 20, ownerHint: false, ...input}, ctx, {dataRoot: tmp()});
+  assert.ok(validOutput(output), JSON.stringify(validOutput.errors));
+  return output;
+};
+for (const part of ['clean', 'redact', 'extract', 'sign']) {
+  for (const code of ['INPUT_REJECTED', 'INPUT_TOO_LARGE', 'OUTPUT_TOO_LARGE', 'INPUT_DATA_VALIDATION_FAIL', 'OUTPUT_DATA_VALIDATION_FAIL']) {
+    test(`${part} refuses an older run's log (${code}): counted as unavailable, and the call answers`, async() => {
+      const output = await asked(refusing(ADDRESSES[part], coded(code))(world({runs: [target(), run(1, 10, [job('test', FAIL('t poison'))])]})));
+      const h = byName(output).test;
+      assert.deepStrictEqual([h.verdict, h.why, h.notCompared], ['unknown', 'history_not_compared', 1]);
+      assert.deepStrictEqual(output.coverage.logsUnavailable, [{runId: '1', job: 'test'}]);
+    });
+  }
+}
+
+test('a part refuses the log of another job of the triaged run: that job says so, and the call answers', async() => {
+  const output = await asked(refusing(ADDRESSES.extract, coded('INPUT_REJECTED'))(world({runs: [run(2, 20, [job('test', FAIL('t one')), job('lint', FAIL('t poison'))])]})));
+  assert.deepStrictEqual([byName(output).test.verdict, byName(output).lint.verdict, byName(output).lint.why], ['new', 'unknown', 'own_log_not_read']);
+  assert.deepStrictEqual(output.coverage.logsUnavailable, [{runId: '2', job: 'lint'}]);
+});
+
+test('a match in another run still counts beside a log a part refuses', async() => {
+  const output = await asked(refusing(ADDRESSES.sign, coded('INPUT_REJECTED'))(world({runs: [run(3, 30, [job('test', FAIL('t poison'))]), target(), failedBefore()]})));
+  const h = byName(output).test;
+  assert.deepStrictEqual([h.verdict, h.runIds, h.notCompared], ['recurring', ['1', '2'], 1]);
+});
+
+test('a part refuses the triaged job\'s own log: the call fails, as before', async() => {
+  for (const part of ['clean', 'redact', 'extract', 'sign']) {
+    await assert.rejects(asked(refusing(ADDRESSES[part], coded('INPUT_REJECTED'))(world({runs: [run(2, 20, [job('test', FAIL('t poison'))])]}))), (err) => err.code === 'INPUT_REJECTED', part);
+  }
+});
+
+test('an error that is no refusal of the log fails the call: a fault, a cancel, a busy or a reloading runtime', async() => {
+  const runs = () => world({runs: [target(), run(1, 10, [job('test', FAIL('t poison'))])]});
+  await assert.rejects(asked(refusing(ADDRESSES.clean, () => new TypeError('a fault'))(runs())), TypeError);
+  for (const code of ['VALIDATION_TIMEOUT', 'DEVICE_INVOKE_EXCEPTION', 'CALL_TOKEN_INVALID', 'MODULE_RELOADING', 'SESSION_WORKERS_BUSY', 'VALIDATION_QUARANTINED', 'VALIDATION_CALLER_THROTTLED', 'DEVICE_NOT_RESPONDING']) {
+    await assert.rejects(asked(refusing(ADDRESSES.extract, coded(code))(runs())), (err) => err.code === code, code);
+  }
+});
+
+test('a truncated log a part refuses is counted once, as unavailable', async() => {
+  const runs = [target(), {...run(1, 10, [{...job('test', FAIL('t poison')), truncate: 5}])}];
+  const output = await asked(refusing(ADDRESSES.clean, coded('INPUT_REJECTED'))(world({runs})));
+  assert.deepStrictEqual([output.coverage.logsTruncated, output.coverage.logsUnavailable], [0, [{runId: '1', job: 'test'}]]);
+});
+
+test('a refused log leaves nothing in the cache, and none of its error in the answer', async() => {
+  const dataRoot = tmp();
+  const gh = () => world({runs: [target(), run(1, 10, [{id: 77, name: 'test', step: 'Test', log: FAIL('t poison')}])]});
+  const refused = await triage({repo: 'acme/widgets', runId: '2', window: 50, maxLogs: 20, ownerHint: false}, refusing(ADDRESSES.sign, () => Object.assign(new Error('a-part-said-this'), {code: 'INPUT_REJECTED'}))(gh()), {dataRoot});
+  assert.ok(!JSON.stringify(refused).includes('a-part-said-this'));
+  assert.ok(!fs.readdirSync(dataRoot, {recursive: true}).some((f) => String(f).endsWith('.json') && fs.readFileSync(path.join(dataRoot, String(f)), 'utf8').includes('"1/77"')));
+  const next = await triage({repo: 'acme/widgets', runId: '2', window: 50, maxLogs: 20, ownerHint: false}, makeCtx(gh()), {dataRoot});
+  assert.deepStrictEqual([byName(next).test.verdict, byName(next).test.notCompared], ['new', 0], 'read when it can be');
+});
