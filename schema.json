@@ -225,7 +225,7 @@
                               ]
                             },
                             "notCompared": {
-                              "title": "runs that could not be compared with this job: their job of this name could not be read or has no usable signature, or their jobs were not or could not be listed, or they did not pass and their workflow can't be told",
+                              "title": "runs that could not be compared with this job: their job of this name could not be read or has no usable signature, or their jobs were not or could not be listed, or they did not pass and their workflow can't be told, or an earlier attempt of theirs was not read",
                               "type": "integer",
                               "minimum": 0
                             },

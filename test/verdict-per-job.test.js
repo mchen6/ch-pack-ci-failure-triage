@@ -699,3 +699,68 @@ test('a recurring job whose failure is also known under another name stays recur
   const h = byName(output).test;
   assert.deepStrictEqual([h.verdict, h.why, h.runIds], ['recurring', null, ['2', '3']]);
 });
+
+// ---- a success that was re-run (#24's high, 5) ----
+// GitHub lists a run's latest attempt only: what an earlier one failed is known
+// from the cache or not at all.
+test('a success at a later attempt whose attempt before it was never read: not compared, so never "new"', async() => {
+  const output = await attempted(world({runs: [target(), ok(1, 10)]}), {1: 2}, tmp());
+  const h = byName(output).test;
+  assert.deepStrictEqual([h.verdict, h.why, h.notCompared, h.runIds], ['unknown', 'history_not_compared', 1, ['2']]);
+  assert.match(output.summary, /could not be told: 1 other run in the last 2 runs could not be compared/);
+});
+
+test('a success at its first attempt, and one whose attempt GitHub does not give, are compared', async() => {
+  for (const output of [await attempted(world({runs: [target(), ok(1, 10)]}), {}, tmp()), (await go(world({runs: [target(), ok(1, 10)]}), {runId: '2'}, tmp())).output]) {
+    assert.deepStrictEqual([byName(output).test.verdict, byName(output).test.notCompared], ['new', 0]);
+  }
+});
+
+test('a success at a later attempt whose attempt before it the cache knows is compared', async() => {
+  // it failed another job
+  const dataRoot = tmp();
+  await attempted(world({runs: [target(), run(1, 10, [job('lint', FAIL('t lint'))])]}), {}, dataRoot);
+  const after = await attempted(world({runs: [target(), ok(1, 10)]}), {1: 2}, dataRoot);
+  assert.deepStrictEqual([byName(after).test.verdict, byName(after).test.notCompared], ['new', 0], 'another job');
+  // it failed with no job
+  const none = tmp();
+  await attempted(world({runs: [target(), run(1, 10, [])]}), {}, none);
+  const then = await attempted(world({runs: [target(), ok(1, 10)]}), {1: 2}, none);
+  assert.deepStrictEqual([byName(then).test.verdict, byName(then).test.notCompared], ['new', 0], 'no job');
+  // an attempt after it was never read
+  const later = await attempted(world({runs: [target(), ok(1, 10)]}), {1: 3}, dataRoot);
+  assert.deepStrictEqual([byName(later).test.verdict, byName(later).test.notCompared], ['unknown', 1], 'attempt 2 never read');
+  // ... nor when the attempt it knows failed this job another way
+  const same = tmp();
+  await attempted(world({runs: [target(), run(1, 10, [job('test', FAIL('t other'))])]}), {}, same);
+  const known = await attempted(world({runs: [target(), ok(1, 10)]}), {1: 2}, same);
+  assert.deepStrictEqual([byName(known).test.verdict, byName(known).test.notCompared], ['new', 0], 'attempt 1 failed another way');
+  const unread = await attempted(world({runs: [target(), ok(1, 10)]}), {1: 3}, same);
+  assert.deepStrictEqual([byName(unread).test.verdict, byName(unread).test.notCompared], ['unknown', 1], 'attempt 2 never read, attempt 1 another way');
+});
+
+test('a record with no attempt number is no record of the attempt before', async() => {
+  const dataRoot = tmp();
+  await go(world({runs: [target(), run(1, 10, [job('lint', FAIL('t lint'))])]}), {runId: '2'}, dataRoot);
+  const output = await attempted(world({runs: [target(), ok(1, 10)]}), {1: 2}, dataRoot);
+  assert.deepStrictEqual([byName(output).test.verdict, byName(output).test.notCompared], ['unknown', 1]);
+});
+
+test('a success read only as the later attempt it is says nothing of the one before', async() => {
+  const dataRoot = tmp();
+  const passed = () => run(1, 10, [job('optional', FAIL('t optional'))], {conclusion: 'success'});
+  await attempted(world({runs: [target(), passed()]}), {1: 2}, dataRoot, {runId: '1'});
+  const output = await attempted(world({runs: [target(), passed()]}), {1: 2}, dataRoot);
+  assert.deepStrictEqual([byName(output).test.verdict, byName(output).test.notCompared], ['unknown', 1]);
+});
+
+test('a match that was found stands beside a success that was re-run unseen', async() => {
+  const output = await attempted(world({runs: [run(3, 30, [job('test', FAIL('t one'))]), run(2, 20, [job('test', FAIL('t one'))]), ok(1, 10)]}), {1: 2}, tmp(), {runId: '3'});
+  const h = byName(output).test;
+  assert.deepStrictEqual([h.verdict, h.runIds, h.notCompared], ['recurring', ['2', '3'], 1]);
+});
+
+test('a success that was re-run unseen counts once when the triaged run is a success too', async() => {
+  const output = await attempted(world({runs: [run(2, 20, [job('test', FAIL('t one'))], {conclusion: 'success'}), ok(1, 10)]}), {1: 2}, tmp());
+  assert.strictEqual(byName(output).test.notCompared, 1);
+});

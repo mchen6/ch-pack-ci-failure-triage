@@ -126,6 +126,23 @@ test('a run_id not among the listed runs is RUN_NOT_FOUND', async () => {
   await assert.rejects(triage({repo: 'acme/widgets', run_id: '999'}, makeCtx(gh)), (err) => err.code === 'RUN_NOT_FOUND');
 });
 
+// (a larger window may list more only where there is one, and the list filled this one)
+test('RUN_NOT_FOUND names a larger window where one may list more', async () => {
+  const runs = Array.from({length: 100}, (_, n) => ({id: n + 1, conclusion: 'success', at: `2026-11-10T00:${String(n % 60).padStart(2, '0')}:00Z`, jobs: []}));
+  const said = (input, listed) => triage({repo: 'acme/widgets', run_id: '999', ...input}, makeCtx(world({runs: runs.slice(0, listed)}))).then(() => null, (err) => err.message);
+  const N = (n) => `RUN_NOT_FOUND: run 999 is not among the last ${n} runs of acme/widgets`;
+  assert.strictEqual(await said({}, 100), `${N(50)}; a larger window (up to 100) may list more`);
+  assert.strictEqual(await said({window: 3}, 100), `${N(3)}; a larger window (up to 100) may list more`);
+  assert.strictEqual(await said({window: 100}, 100), N(100), 'no larger one');
+  assert.strictEqual(await said({}, 49), N(49), 'fewer runs than the window');
+});
+
+test('the description says which runs run_id can name', () => {
+  const {description} = require('../api.json').device.serviceList['urn:ch-packs:serviceID:triageService'].actionList[0];
+  assert.ok(description.includes("pass run_id for one of the repository's last `window` runs (default 50, up to 100)."), description);
+  assert.ok(!description.includes('pass run_id for another run'));
+});
+
 test('the scenario declares every address it calls, each an action of the part it names', async () => {
   assert.strictEqual(pkg.countinghouse.role, 'scenario');
   assert.ok(!('remotes' in pkg.countinghouse), 'the access module owns the GitHub remote');
