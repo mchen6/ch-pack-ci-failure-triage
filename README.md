@@ -45,7 +45,8 @@ three shapes). The triage result has exactly these fields:
   has `ctx.usage()` (below); at most 801 characters.
 - **`run`:** `{id, url, branch, commit, workflow, job, step}`.
 - **`failed_jobs`:** every failed job of the run (at most 50 listed), each
-  `{job, step, first_error, history}`; the pack cannot tell which of them gate
+  `{job, step, first_error, history}`, and `values`, `values_omitted` or
+  `values_same_as` when it has them; the pack cannot tell which of them gate
   the run. `first_error` is the failing step's first error line, or `null`
   when its log was not read.
   - `history` is that job's own verdict, against the job of the same name in
@@ -61,8 +62,22 @@ three shapes). The triage result has exactly these fields:
     (`seen_under_another_job_name`). Only runs that did not pass are listed,
     so when the triaged run is itself a success, the window's other successes
     could not be compared.
-- **`errors`:** at most 40 strings, the error lines of the triaged job, the
-  failing step's first.
+- **`errors`:** at most 40 error lines of the triaged job, the failing step's
+  first. The expected and actual values it finds for a failed assertion follow
+  its line; a format it does not recognise gives none. The values have one
+  limit across the whole answer: 40 lines and 4,000 characters, as sent, the
+  notes included. It counts the assertion's own line, and each value, only
+  where that isn't an error line already. A note says when any of the triaged
+  job's were left out, and `values_omitted` how many of another job's failed
+  assertions may not have all their values shown. A value the screen judges not
+  to be words, a number or a name shows as `<withheld>`, or, for a whole line,
+  `<value line withheld>`. A short secret, one written in groups, or one that
+  reads like ordinary words or a plain number can still pass, and occasionally
+  a longer one, whole or in part (see Privacy).
+- **`failed_jobs[].values`:** another job's failed assertions with their
+  values, under the same limit. `values_same_as` instead names the place in
+  `failed_jobs` of an earlier job with the same ones (place 0 is the
+  triaged job, whose values are in `errors`).
 - **`history`:** `{signature, count, window, verdict, firstSeen, lastSeen,
   runIds}` of the run's one failed job. It is `null` when several jobs failed
   (no one verdict stands for them: each has its own, and the summary counts
@@ -127,8 +142,19 @@ The summary ends with the gaps when there are any.
 
 **Privacy:**
 - Every string that reaches the model goes through
-  [ch-step-redact](https://github.com/mchen6/ch-step-redact): error lines, step,
-  job, workflow and branch names, the owner logins and the summary.
+  [ch-step-redact](https://github.com/mchen6/ch-step-redact): error lines, a
+  failed assertion's values, step, job, workflow and branch names, the owner
+  logins and the summary.
+- **Redaction and the value screen are best effort, not a guarantee.** A failed
+  test's expected and actual values are log text and can hold what the test
+  compared. Known secret formats are masked, and a value the screen judges not
+  to be words, a number or a name is withheld. The screen covers a failed
+  assertion shown with its values: its own line and those values, also where
+  they are error lines. It does not cover one without values, in another step
+  or left out by the limits, a line of JSON cut short, any other error line, or
+  `first_error`: those are redacted only. A short secret, one written in
+  groups, or one that reads like ordinary words or a plain number can still
+  pass and reach the model, and occasionally a longer one, whole or in part.
 - The owner hint is GitHub logins only, never a name or an address: the author
   of the commit where the failure first appeared, then the authors of the
   other commits it failed on. It is a suggestion, and there is no blame call.
