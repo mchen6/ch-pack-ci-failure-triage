@@ -147,7 +147,7 @@ test('a no-jobs entry mixed with a signed or expired entry\'s fields is dropped'
 test('a job\'s entry with a run list\'s field is dropped on read', () => {
   const root = tmp();
   const signed = {jobId: 1, signature: 'a'.repeat(64), algorithm: null, step: null, commit: 'c', createdAt: 't', errorLineHashes: []};
-  seed(root, {'1/1': signed, '1/2': {...signed, lost: true}, '1/3': {...signed, notFailed: true}});
+  seed(root, {'1/1': signed, '1/2': {...signed, lost: true}, '1/3': {...signed, notFailed: true}, '1/4': {...signed, earlier: []}, '1/5': {...signed, unsigned: true}});
   assert.deepStrictEqual(Object.keys(readCache('acme/widgets', root).runs), ['1/1']);
 });
 
@@ -166,4 +166,21 @@ test('a run\'s list written over another: the jobs it failed before stay', () =>
   assert.deepStrictEqual(after(list([A]), list([B], {conclusion: 'success', notFailed: true})), list([A]), 'a success never over a failure');
   assert.deepStrictEqual(after(list([A], {notFailed: true, conclusion: 'success'}), list([B])), list([B]), 'a success\'s list is no failure');
   assert.deepStrictEqual(after(list([A]), {noJobs: true, conclusion: 'startup_failure', commit: 'c', createdAt: 't'}), list([A], {conclusion: 'startup_failure', earlier: ['1']}));
+});
+
+// (two writers of one process in one millisecond, as two threads can be)
+test('a cache write\'s temp file is its own', () => {
+  const root = tmp();
+  const {writeFileSync} = fs;
+  const now = Date.now;
+  const temps = [];
+  fs.writeFileSync = (file, ...rest) => { if (String(file).endsWith('.tmp')) temps.push(String(file)); return writeFileSync(file, ...rest); };
+  Date.now = () => 1;
+  try {
+    for (let n = 1; n <= 2; n++) assert.strictEqual(writeCache('acme/widgets', {[n]: {jobId: n, signature: 'a'.repeat(64), commit: 'c', createdAt: 't'}}, root), true);
+  } finally {
+    fs.writeFileSync = writeFileSync;
+    Date.now = now;
+  }
+  assert.strictEqual(new Set(temps).size, 2, temps.join());
 });

@@ -50,11 +50,11 @@ three shapes). The triage result has exactly these fields:
   when its log was not read.
   - `history` is that job's own verdict, against the job of the same name in
     the window's other runs that did not pass: `{verdict, count, runIds,
-    firstSeen, lastSeen, notCompared, why}`. `runIds` has the newest ten, and
-    `count` counts them all.
+    firstSeen, lastSeen, notCompared, why}`. `runIds` has up to
+    ten of the newest, and `count` counts them all.
   - `verdict` is `new`, `flaky`, `recurring` or `unknown`. `new` means no job
-    of this name failed the same way in the window. `unknown` never means
-    that the failure is new: `why` says whether this job's own log was not
+    of this name failed the same way in the runs compared. `unknown` does not
+    say whether the failure is new: `why` says whether this job's own log was not
     read (`own_log_not_read`), some runs could not be compared
     (`history_not_compared`; `notCompared` counts the runs), or a job of
     another name is known to have failed the same way

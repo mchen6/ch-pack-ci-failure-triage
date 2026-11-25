@@ -139,7 +139,7 @@
                           "maxLength": 500
                         },
                         "history": {
-                          "title": "this job's verdict against the jobs of its name in the window's other runs that did not pass: new means no job of this name failed the same way; unknown means the comparison could not be made, or a job of another name failed the same way, so it may still be a repeat",
+                          "title": "this job's verdict against the jobs of its name in the window's other runs that did not pass: new means no job of this name failed the same way in the runs compared; unknown means the comparison could not be made, or a job of another name failed the same way, so it may still be a repeat",
                           "type": "object",
                           "properties": {
                             "verdict": {
@@ -225,7 +225,7 @@
                               ]
                             },
                             "notCompared": {
-                              "title": "runs in the window that could not be compared with this job: their job of this name could not be read or has no usable signature, or their jobs could not be listed",
+                              "title": "runs in the window that could not be compared with this job: their job of this name could not be read or has no usable signature, or their jobs were not or could not be listed",
                               "type": "integer",
                               "minimum": 0
                             },

@@ -38,10 +38,10 @@ test('the latest failed run is triaged end to end, from the recorded server', as
   assert.strictEqual(output.run.workflow, 'CI');
   // several failed jobs: each has its own verdict, and none stands for the run
   assert.strictEqual(output.history, null);
-  assert.strictEqual(output.failed_jobs[0].history.count, 1);
-  assert.strictEqual(output.failed_jobs[0].history.verdict, 'new');
+  // (the recorded logs hold no error line, below: nothing to sign, so nothing to compare)
+  assert.deepStrictEqual([output.failed_jobs[0].history.verdict, output.failed_jobs[0].history.why, output.failed_jobs[0].history.count], ['unknown', 'history_not_compared', 0]);
   // the recorded run failed in three jobs: all listed, all read (0.3.0)
-  assert.match(output.summary, /^3 jobs failed; the pack cannot tell which ones gate the run\. Compared by job name over the last 39 runs: \d+ new/);
+  assert.match(output.summary, /^3 jobs failed; the pack cannot tell which ones gate the run\. Compared by job name over the last 39 runs: 3 could not be told;/);
   assert.strictEqual(output.failed_jobs.length, 3);
   assert.deepStrictEqual(output.coverage, {runsListed: 39, failedRuns: 1, logsFetched: 3, logsExpired: 0, logsTruncated: 0, logsUnavailable: [], cacheHits: 0, capHit: false, historyRebuilt: false});
   // The recorded logs are synthetic (no raw line is kept), so they hold no error line;
