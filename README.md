@@ -136,7 +136,7 @@ The summary ends with the gaps when there are any.
   job ids, signatures, commit SHAs, dates, GitHub's conclusions and sha256
   hashes of the normalised error lines and of step names, and job names by
   the pack's keyed hash; never a raw line or a token. It remembers logs that
-  have expired, failed runs that had no job, and the jobs a run failed before
+  have expired or had nothing to compare, failed runs that had no job, and the jobs a run failed before
   it was re-run. A second call fetches only the logs it has not read, plus
   the triaged run's for their error lines, and lists a run's jobs again when
   the run is in progress, finished differently, or has a new attempt (where
