@@ -4,7 +4,7 @@ require('./tmp-dirs');
 // triaged job's under their verdicts in `errors`, another job's on its entry in
 // `failed_jobs`. Redacted, bounded, and saying so when anything is cut. The
 // values come from ch-step-error-patterns' `details`; here a wrapper supplies
-// them, so this file holds at any pinned version of that part.
+// them, so all but the last test hold at any pinned version of that part.
 const test = require('node:test');
 const assert = require('node:assert');
 const crypto = require('node:crypto');
@@ -44,8 +44,11 @@ const withDetails = (ctx, detailsFor) => {
   ctx.call = async (address, input) => {
     const r = await call(address, input);
     if (address !== ADDRESSES.extract || !Array.isArray(input.steps) || input.steps.length === 0) return r;
+    // (the part's own details, which a version of it may give, are never used:
+    // a wrapper says what there is, or that there is none)
+    const {details: own, ...output} = r.output;
     const details = detailsFor(input, r.output);
-    return details === undefined ? r : {output: {...r.output, details}};
+    return {...r, output: details == null ? output : {...output, details}};
   };
   return ctx;
 };
@@ -465,4 +468,15 @@ test('a swapped value line keeps its runner\'s tag: one failure\'s value never r
   // (a tag the screen withheld stays withheld)
   const hidden = await answered([lines[0], {...lines[2], text: "[a]   + 'one'"}], [{...block(0, '[<withheld>] ', '[<withheld>] AssertionError: one differs', "  + 'one'", 1)}]);
   assert.deepStrictEqual(hidden.errors, ['[<withheld>] AssertionError: one differs', "[<withheld>]   + 'one'"], JSON.stringify(hidden.errors));
+});
+
+// The wrapper above stands in for the part, so a difference between the two would not show there. Here the pinned
+// error-patterns' own answer goes the whole way: its details, read from the log, to the pack's answer.
+test('the pinned part\'s own details reach the answer', async () => {
+  const lines = ['  1) suite', '       compares:', '     AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:', '+ actual - expected', '', "+ 'beta-actual'", "- 'alpha-expected'", '', '      at Context.<anonymous> (test/a.js:15:12)'];
+  const jobs = [{id: nextJob++, name: 'test', step: 'Test', log: runnerLog('Run npm test', lines)}, {id: nextJob++, name: 'other', step: 'Test', log: runnerLog('Run npm test', lines.map((l) => l.replace('beta-actual', 'gamma-actual')))}];
+  const out = await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: false}, makeCtx(world({runs: [run(jobs)]})), {dataRoot: tmp()});
+  for (const v of ["+ 'beta-actual'", "- 'alpha-expected'"]) assert.ok(out.errors.some((l) => l.includes(v)), `${v}: ${JSON.stringify(out.errors)}`);
+  const other = out.failed_jobs.find((j) => j.job === 'other');
+  assert.ok(JSON.stringify(other.values).includes('gamma-actual'), JSON.stringify(other));
 });

@@ -37,11 +37,16 @@ function runnerLog(step, lines, exitCode = 1) {
 
 const sha = (n) => n.toString(16).padStart(40, '0');
 
-// runs: [{id, conclusion, workflow?, branch?, at, sha?, jobs?: [{id, name, step, log: string | 'expired' | 'unavailable', truncate?}]}]
+// runs: [{id, conclusion, workflow?, workflowId? (a number), attempt?, branch?, at, sha?, jobs?: [{id, name, step, log: string | 'expired' | 'unavailable', truncate?}]}]
 // commits: {sha: login | null}
 function world({runs, commits = {}}) {
   const template = recorded('list_workflow_runs');
-  const base = JSON.parse(template.content[0].text).workflow_runs[0];
+  // (the recorded run's own attempt number is left out: listRuns hands one on, and a run says its own attempt or none)
+  const {run_attempt: recordedAttempt, ...base} = JSON.parse(template.content[0].text).workflow_runs[0];
+  // GitHub gives each workflow its own id, one for all of its runs: here by the workflow's name
+  // (a run can say its own).
+  const ids = new Map();
+  const workflowId = (r) => r.workflowId ?? (ids.has(r.workflow || 'CI') ? ids : ids.set(r.workflow || 'CI', base.workflow_id + ids.size)).get(r.workflow || 'CI');
   const jobTemplate = JSON.parse(recorded('list_workflow_jobs').content[0].text).jobs.jobs[1];
   const seen = [];
   const byJob = new Map();
@@ -49,7 +54,7 @@ function world({runs, commits = {}}) {
   const serve = (tool, args) => {
     seen.push({tool, args});
     if (tool === 'actions_list' && args.method === 'list_workflow_runs') {
-      const list = runs.slice(0, args.perPage).map((r) => ({...base, id: r.id, name: r.workflow || 'CI', conclusion: r.conclusion, status: r.conclusion == null ? 'in_progress' : 'completed',
+      const list = runs.slice(0, args.perPage).map((r) => ({...base, id: r.id, name: r.workflow || 'CI', workflow_id: workflowId(r), ...(r.attempt === undefined ? {} : {run_attempt: r.attempt}), conclusion: r.conclusion, status: r.conclusion == null ? 'in_progress' : 'completed',
         head_branch: r.branch === undefined ? 'main' : r.branch, head_sha: r.sha || sha(r.id), created_at: r.at, html_url: `https://github.com/acme/widgets/actions/runs/${r.id}`}));
       return text({total_count: runs.length, workflow_runs: list});
     }

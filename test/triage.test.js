@@ -105,8 +105,8 @@ test('the cache makes the second call fetch only new runs', async () => {
 // three times and rewrote it. The latest failed run is always fetched again
 // for its error lines, and its entry was written back even when it was
 // unchanged. Through the runtime's file broker, each of those is a round trip.
-test('a warm call whose latest run is unchanged reads the cache once and writes nothing', async () => {
-  const runs = [run(5, 'failure', 5, {jobs: [job(50, FAIL(1))]}), run(4, 'failure', 4, {jobs: [job(40, FAIL(2))]}), run(2, 'success', 2)];
+for (const attempt of [undefined, 1]) test(`a warm call whose latest run is unchanged reads the cache once and writes nothing (${attempt === undefined ? 'no attempt number' : 'attempt 1'})`, async () => {
+  const runs = [run(5, 'failure', 5, {attempt, jobs: [job(50, FAIL(1))]}), run(4, 'failure', 4, {attempt, jobs: [job(40, FAIL(2))]}), run(2, 'success', 2, {attempt})];
   const first = await go(world({runs}), {});
   const ops = {read: 0, write: 0, rename: 0, mkdir: 0};
   const real = {readFileSync: fs.readFileSync, writeFileSync: fs.writeFileSync, renameSync: fs.renameSync, mkdirSync: fs.mkdirSync};
@@ -369,7 +369,7 @@ test('each cached run records the algorithm that signed it; the same algorithm k
   assert.strictEqual(first.output.coverage.historyRebuilt, false, 'a first call rebuilds nothing');
   assert.strictEqual(signCalls(first.ctx), 3, 'no probe: the target\'s own sign output names the algorithm');
   const cache = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
-  assert.deepStrictEqual(jobEntries(cache).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules3+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
+  assert.deepStrictEqual(jobEntries(cache).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules4+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
   const again = world({runs: THREE()});
   const second = await go(again, {}, first.dataRoot);
   assert.strictEqual(again.logsFetched(), 1, 'only the latest failed run, for its error lines');
@@ -394,7 +394,7 @@ for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0+rule
     assert.match(second.output.summary, /; history rebuilt \(the failure signature changed\)/);
     const rewritten = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
     assert.ok(!JSON.stringify(rewritten).includes('5'.repeat(64)), 'every one rewritten with the current algorithm');
-    assert.deepStrictEqual(jobEntries(rewritten).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules3+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
+    assert.deepStrictEqual(jobEntries(rewritten).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules4+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
   });
 }
 
@@ -978,15 +978,35 @@ test('a cached failure that passed on re-run is still counted: the next failure 
 });
 
 // A12: a failed run with no jobs is cached: not listed again on every call
-test('a failed run with no jobs is listed once, then cached', async () => {
+for (const attempt of [undefined, 1]) test(`a failed run with no jobs is listed once, then cached (${attempt === undefined ? 'no attempt number' : 'attempt 1'})`, async () => {
   const dataRoot = tmp();
-  const runs = [run(9, 'failure', 9, {jobs: [job(90, FAIL(1))]}), run(8, 'failure', 8, {jobs: []})];
+  const runs = [run(9, 'failure', 9, {attempt, jobs: [job(90, FAIL(1))]}), run(8, 'failure', 8, {attempt, jobs: []})];
   await go(world({runs}), {}, dataRoot);
   const again = world({runs});
   const {output} = await go(again, {}, dataRoot);
   const listed = again.seen.filter((s) => s.tool === 'actions_list' && s.args.method === 'list_workflow_jobs').map((s) => s.args.resource_id);
   assert.deepStrictEqual(listed, ['9']);
   assert.strictEqual(output.coverage.cacheHits, 1);
+});
+test('a run cached with its attempt number is kept when a later list gives none, and read again when it gives another', async () => {
+  const dataRoot = tmp();
+  const runs = (attempt) => [run(9, 'failure', 9, {attempt, jobs: [job(90, FAIL(1))]}), run(8, 'failure', 8, {attempt, jobs: []}), run(7, 'failure', 7, {attempt, jobs: [job(70, FAIL(2))]})];
+  const listed = async (attempt, root = dataRoot) => {
+    const gh = world({runs: runs(attempt)});
+    await go(gh, {}, root);
+    return gh.seen.filter((s) => s.tool === 'actions_list' && s.args.method === 'list_workflow_jobs').map((s) => s.args.resource_id);
+  };
+  await listed(1);
+  assert.deepStrictEqual(await listed(1), ['9']);
+  assert.deepStrictEqual(await listed(undefined), ['9']);
+  // (and its number with it: it is still the one it was)
+  assert.deepStrictEqual(await listed(1), ['9']);
+  assert.deepStrictEqual((await listed(2)).sort(), ['7', '8', '9']);
+  // a cache from before lists had attempt numbers, then a list that has them: read again once, then kept
+  const older = tmp();
+  await listed(undefined, older);
+  assert.deepStrictEqual((await listed(1, older)).sort(), ['7', '8', '9']);
+  assert.deepStrictEqual(await listed(1, older), ['9']);
 });
 // (the final pass, s3 C2) a login owner-hint passes but the report refuses
 // (a bot login over 39 characters): the hint is dropped, never the call
