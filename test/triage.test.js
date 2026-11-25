@@ -238,17 +238,32 @@ test('a receipt longer than RECEIPT_MAX is left out, so the summary stays within
   assert.ok(fits.length - plain.length - 1 <= RECEIPT_MAX);
 });
 
-test('a 60,000-line log triages in under 3 seconds in-process', async () => {
-  const lines = Array.from({length: 60000}, (_, i) => `ok ${i} - case ${i} passed (${i % 97}.0ms) ${'x'.repeat(40)}`);
-  const big = runnerLog('Run npm test', [...lines, 'not ok 60001 - the last case']);
-  assert.ok(Buffer.byteLength(big) > 5 * 1024 * 1024, 'over 5 MB');
-  const gh = world({runs: [run(2, 'failure', 2, {jobs: [job(20, big)]})]});
-  const started = process.hrtime.bigint();
-  const {output} = await go(gh, {});
-  const ms = Number(process.hrtime.bigint() - started) / 1e6;
-  process.stdout.write(`# a 60,000-line log: ${ms.toFixed(0)} ms through the chain\n`);
-  assert.ok(ms < 3000, `${ms} ms`);
-  assert.ok(output.errors.length > 0);
+// What is asked for, done, kept and sent for a large log is bounded by counts, the
+// same as for a small one; a wall clock depends on the machine.
+test('a large log is read once and whole, and costs the parts no more calls and the answer no more lines than a small one', async () => {
+  const triageOf = async (cases) => {
+    const noise = Array.from({length: cases}, (_, i) => `ok ${i} - case ${i} passed (${i % 97}.0ms) ${'x'.repeat(40)}`);
+    const errors = Array.from({length: 120}, (_, i) => `Error: failure number ${i} ${i === 3 ? 'word '.repeat(300) : ''}`);
+    const log = runnerLog('Run npm test', [...noise.slice(0, cases / 2), ...errors, ...noise.slice(cases / 2)]);
+    const gh = world({runs: [run(2, 'failure', 2, {jobs: [job(20, log)]})]});
+    return {...await go(gh, {}), gh, log};
+  };
+  const small = await triageOf(60);
+  const large = await triageOf(60000);
+  assert.ok(Buffer.byteLength(large.log) > 5 * 1024 * 1024, 'over 5 MB');
+  // asked for once, and whole
+  assert.strictEqual(large.gh.logsFetched(), 1);
+  const asked = large.gh.seen.map((r) => r.args || r).filter((a) => a.tail_lines !== undefined);
+  assert.ok(asked.length === 1 && asked[0].tail_lines > large.log.split('\n').length, JSON.stringify(asked));
+  // the same part calls, the same errors, every line within its bound
+  assert.strictEqual(large.ctx.calls.length, small.ctx.calls.length);
+  assert.deepStrictEqual(large.output.errors, small.output.errors);
+  assert.strictEqual(large.output.errors.length, 40, 'the cap bites');
+  assert.ok(large.output.errors.some((l) => l.startsWith('Error: failure number 3 ') && l.length === 500 && l.endsWith('\u2026')), JSON.stringify(large.output.errors.map((l) => l.length)));
+  // what is kept: a hash for each signed line, and no raw line
+  const kept = fs.readFileSync(path.join(large.dataRoot, 'acme__widgets', 'fingerprints.json'), 'utf8');
+  assert.ok(!kept.includes('failure number') && !kept.includes('case 1 '), 'no raw line');
+  assert.strictEqual(kept.length, fs.readFileSync(path.join(small.dataRoot, 'acme__widgets', 'fingerprints.json'), 'utf8').length);
 });
 
 // From /code-review medium on #1.
