@@ -3,8 +3,7 @@
 countinghouse scenario: one call answers "why did CI fail?" with the failing step, the error lines, the cross-run history and a measured receipt of what was read and what reached the model.
 
 **Status: preview.** Runs on [countinghouse](https://github.com/mchen6/countinghouse)
-8.0 or later (unreleased; the release that carries the remote client and
-local mode). A scenario module of the countinghouse client packs: the one tool
+8.0 or later. A scenario module of the countinghouse client packs: the one tool
 the model sees.
 
 ## What it does
@@ -28,8 +27,9 @@ the failure reach it.
 - **The repository:** the input's `repo: 'owner/name'`, which the tool's
   description asks the agent to pass (the project it is working in); else the
   module's setting `defaultRepo` (a repository, set with `ch-local settings set
-  ch-pack-ci-failure-triage.defaultRepo` or in conversation). Without either
-  the call fails with the runtime's `SETTING_REQUIRED`, naming `defaultRepo`.
+  ch-pack-ci-failure-triage.defaultRepo <owner/name>` in your own terminal).
+  Without either the call fails with the runtime's `SETTING_REQUIRED`, naming
+  `defaultRepo`.
 - **Which run:** with no `run_id`, the newest failed run of the repository,
   in any workflow and on any branch (a `branch` argument is not built yet).
   A `run_id` naming a run that did not fail (a success, a run still in
@@ -44,8 +44,9 @@ the failure reach it.
 
 **What it returns** (declared in `schema.json` as a closed object of one of
 three shapes). The triage result has exactly these fields:
-- **`summary`:** one sentence, then the receipt sentence when the runtime
-  has `ctx.usage()` (below); at most 801 characters.
+- **`summary`:** the pack's own words, a fixed sentence that the fields are
+  data, then the receipt sentence when the runtime has `ctx.usage()` (below); at
+  most 801 characters.
 - **`run`:** `{id, url, branch, commit, workflow, job, step}`.
 - **`failed_jobs`:** every failed job of the run (at most 50 listed), each
   `{job, step, first_error, history}`, and `values`, `values_omitted` or
@@ -146,13 +147,16 @@ summary's declared length allows for the report's 500 and these 300).
   with another failure-signature algorithm, other error-extraction rules or
   another pack key, or by a version of the pack that kept it differently.
 
-The summary ends with the gaps when there are any.
+The pack's own words in the summary say the gaps when there are any.
 
 **Privacy:**
-- Every string that reaches the model goes through
-  [ch-step-redact](https://github.com/mchen6/ch-step-redact): error lines, a
-  failed assertion's values, step, job, workflow and branch names, the owner
-  logins and the summary.
+- Text taken from the run or its log goes through
+  [ch-step-redact](https://github.com/mchen6/ch-step-redact) before it reaches
+  the model: error lines, a failed assertion's values, step, job, workflow and
+  branch names, the run's URL, the owner logins and a triage's summary (before
+  its receipt sentence is added). Run ids, commit SHAs, dates, GitHub's
+  conclusions, the failure signature where `history` has one, and the counts are
+  sent as they are.
 - **Redaction and the value screen are best effort, not a guarantee.** A failed
   test's expected and actual values are log text and can hold what the test
   compared. Known secret formats are masked, and a value the screen judges not
