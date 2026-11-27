@@ -194,18 +194,35 @@ test('a rate limit met reading the owner hint\'s commits says a limit was reache
 
 test('a commit read the runtime refuses is said in owner_hint, never a silent gap; the access module\'s own refusals keep the best effort', async () => {
   const two = () => world({runs: [run(30, 'failure', 100, {jobs: [job(300, FAIL(1))]}), run(29, 'failure', 99, {jobs: [job(290, FAIL(1))]})]});
+  const counting = (fail) => {
+    const n = {reads: 0, hints: 0};
+    const wrap = (address, args, call) => {
+      if (address.endsWith('githubService.runCommits')) { n.reads += 1; return Promise.reject(fail()); }
+      if (address.endsWith('ownerService.hint')) n.hints += 1;
+      return call(address, args);
+    };
+    return {n, wrap};
+  };
   for (const code of ['VALIDATION_TIMEOUT', 'RUNTIME_BUSY']) {
-    const wrap = (address, args, call) => (address.endsWith('githubService.runCommits') ? Promise.reject(new CountinghouseError(code)) : call(address, args));
+    const {n, wrap} = counting(() => new CountinghouseError(code));
     const {output} = await go(two(), {}, {wrap});
     assert.deepStrictEqual(output.owner_hint, {logins: [], why: [`No owner hint: reading a commit's author was refused by the runtime (${code}), so the hint would be incomplete.`]}, code);
+    assert.deepStrictEqual(n, {reads: 1, hints: 0}, `${code}: no read after it, and no hint asked for`);
   }
-  // (the access module's own: a commit not there is no login, as before)
-  const wrap = (address, args, call) => (address.endsWith('githubService.runCommits') ? Promise.reject(Object.assign(new CountinghouseError('COMMIT_NOT_FOUND'), {details: {}})) : call(address, args));
-  const {output} = await go(two(), {}, {wrap});
-  assert.ok(output.owner_hint === null || !output.owner_hint.why.some((w) => w.startsWith('No owner hint')), JSON.stringify(output.owner_hint));
+  // (the access module's own: a commit not there, or one it refuses as
+  // input, is no login, as before; the other commits are still read)
+  for (const code of ['COMMIT_NOT_FOUND', 'INPUT_REJECTED']) {
+    const {n, wrap} = counting(() => Object.assign(new CountinghouseError(code), {details: {}}));
+    const {output} = await go(two(), {}, {wrap});
+    assert.deepStrictEqual(output.owner_hint, {logins: [], why: []}, code);
+    assert.deepStrictEqual(n, {reads: 2, hints: 1}, code);
+  }
+  // (an error with no code is the chain's own fault, never a refusal: it fails the call)
+  const {wrap} = counting(() => new TypeError('a fault of the chain'));
+  await assert.rejects(go(two(), {}, {wrap}), (err) => err instanceof TypeError);
 });
 
-// (error-patterns 0.3.1 and failure-signature 0.3.0 through the whole chain)
+// (error-patterns 0.3.1 and failure-signature 0.2.2 through the whole chain)
 const runOf = (id, m, lines) => run(id, 'failure', m, {jobs: [job(id * 10, runnerLog('Run npm test', lines))]});
 
 test('node\'s far comparison is shown among the values, and a secret on either side of it comes out redacted', async () => {
