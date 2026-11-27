@@ -479,7 +479,7 @@
                     "minimum": 0
                   },
                   "capHit": {
-                    "title": "true when a bound stopped a log, or a run's list of failed jobs, being read: max_logs logs fetched (the run's own jobs take at most half of them), max_logs other runs' jobs listed, or 50 of either unavailable",
+                    "title": "true when a bound stopped a log, or a run's list of failed jobs, being read: max_logs logs fetched (the run's own jobs take at most half of them), max_logs other runs' jobs listed, or 50 of either unavailable; or when GitHub answered with a rate limit, after which nothing more was asked of it",
                     "type": "boolean"
                   },
                   "historyRebuilt": {
@@ -616,7 +616,7 @@
                     "minimum": 0
                   },
                   "capHit": {
-                    "title": "true when a bound stopped a log, or a run's list of failed jobs, being read: max_logs logs fetched (the run's own jobs take at most half of them), max_logs other runs' jobs listed, or 50 of either unavailable",
+                    "title": "true when a bound stopped a log, or a run's list of failed jobs, being read: max_logs logs fetched (the run's own jobs take at most half of them), max_logs other runs' jobs listed, or 50 of either unavailable; or when GitHub answered with a rate limit, after which nothing more was asked of it",
                     "type": "boolean"
                   },
                   "historyRebuilt": {
@@ -735,7 +735,7 @@
                     "minimum": 0
                   },
                   "capHit": {
-                    "title": "true when a bound stopped a log, or a run's list of failed jobs, being read: max_logs logs fetched (the run's own jobs take at most half of them), max_logs other runs' jobs listed, or 50 of either unavailable",
+                    "title": "true when a bound stopped a log, or a run's list of failed jobs, being read: max_logs logs fetched (the run's own jobs take at most half of them), max_logs other runs' jobs listed, or 50 of either unavailable; or when GitHub answered with a rate limit, after which nothing more was asked of it",
                     "type": "boolean"
                   },
                   "historyRebuilt": {

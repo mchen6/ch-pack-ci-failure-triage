@@ -191,3 +191,16 @@ test('a rate limit met reading the owner hint\'s commits says a limit was reache
   assert.strictEqual(output.coverage.capHit, true);
   assert.ok(output.summary.includes('; a limit was reached, so some logs or job lists were not read'), output.summary);
 });
+
+test('a commit read the runtime refuses is said in owner_hint, never a silent gap; the access module\'s own refusals keep the best effort', async () => {
+  const two = () => world({runs: [run(30, 'failure', 100, {jobs: [job(300, FAIL(1))]}), run(29, 'failure', 99, {jobs: [job(290, FAIL(1))]})]});
+  for (const code of ['VALIDATION_TIMEOUT', 'RUNTIME_BUSY']) {
+    const wrap = (address, args, call) => (address.endsWith('githubService.runCommits') ? Promise.reject(new CountinghouseError(code)) : call(address, args));
+    const {output} = await go(two(), {}, {wrap});
+    assert.deepStrictEqual(output.owner_hint, {logins: [], why: [`No owner hint: reading a commit's author was refused by the runtime (${code}), so the hint would be incomplete.`]}, code);
+  }
+  // (the access module's own: a commit not there is no login, as before)
+  const wrap = (address, args, call) => (address.endsWith('githubService.runCommits') ? Promise.reject(Object.assign(new CountinghouseError('COMMIT_NOT_FOUND'), {details: {}})) : call(address, args));
+  const {output} = await go(two(), {}, {wrap});
+  assert.ok(output.owner_hint === null || !output.owner_hint.why.some((w) => w.startsWith('No owner hint')), JSON.stringify(output.owner_hint));
+});

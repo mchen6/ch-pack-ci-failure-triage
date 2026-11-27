@@ -103,7 +103,8 @@ three shapes). The triage result has exactly these fields:
   - `firstSeen` and `lastSeen` are `{runId, commit, createdAt}`.
   - `verdict` is `new`, `flaky` or `recurring`.
 - **`owner_hint`:** `{logins, why}`, at most three GitHub logins with one
-  reason each, or `null`.
+  reason each, or `null`; or no logins and one reason, when the runtime refused
+  reading a commit's author.
 - **`coverage`:** `{runsListed, failedRuns, logsFetched, logsExpired,
   logsTruncated, logsUnavailable, cacheHits, capHit, historyRebuilt}`.
   - `logsUnavailable` is a list of `{runId, job}`.
