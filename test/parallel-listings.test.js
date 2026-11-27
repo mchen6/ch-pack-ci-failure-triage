@@ -159,3 +159,35 @@ test('the summary says a limit was reached, whichever stopped the reading: logs,
   assert.strictEqual(output.coverage.capHit, false);
   assert.ok(!output.summary.includes('a limit was reached'), output.summary);
 });
+
+test('every refusal from GitHub\'s side counts as not compared: a run of too many jobs, an answer over the remote bound or not MCP', async () => {
+  for (const [code, where] of [['JOBS_INCOMPLETE', 'failedJobs'], ['REMOTE_RESULT_TOO_LARGE', 'failedJobs'], ['REMOTE_PROTOCOL', 'failedJobs'], ['REMOTE_RESULT_TOO_LARGE', 'jobLog'], ['REMOTE_PROTOCOL', 'jobLog']]) {
+    const gh = world({runs: runs()});
+    const wrap = (address, args, call) => {
+      if (where === 'failedJobs' && address.endsWith('githubService.failedJobs') && args.runId === '27') return Promise.reject(new CountinghouseError(code));
+      if (where === 'jobLog' && address.endsWith('githubService.jobLog') && args.jobId === '280') return Promise.reject(new CountinghouseError(code));
+      return call(address, args);
+    };
+    const {output} = await go(gh, {}, {wrap});
+    assert.deepStrictEqual(output.coverage.logsUnavailable, [where === 'failedJobs' ? {runId: '27', job: '(jobs unavailable)'} : {runId: '28', job: 'test (24)'}], `${code} on ${where}`);
+  }
+});
+
+test('after a rate limit in a batch, what the rest of that batch met is never a fault: those calls would not have been made one at a time', async () => {
+  const gh = world({runs: runs()});
+  const limited = slow(gh, {answer: (id) => (id === '27' ? refused(TOO_MANY(id)) : null)});
+  const wrap = (address, args, call) => (address.endsWith('githubService.failedJobs') && args.runId === '26' ? Promise.reject(new CountinghouseError('VALIDATION_TIMEOUT')) : call(address, args));
+  const {output} = await go(limited, {}, {wrap});
+  assert.strictEqual(output.coverage.capHit, true);
+  assert.ok(output.coverage.logsUnavailable.some((u) => u.runId === '27'), JSON.stringify(output.coverage.logsUnavailable));
+});
+
+test('a rate limit met reading the owner hint\'s commits says a limit was reached', async () => {
+  const gh = world({runs: [run(30, 'failure', 100, {jobs: [job(300, FAIL(1))]}), run(29, 'failure', 99, {jobs: [job(290, FAIL(1))]})]});
+  const limited = async (tool, args) => (tool === 'list_commits' ? (gh.seen.push({tool, args}), refused('failed to list commits: GET https://github.invalid/repos/acme/widgets/commits: 429 Too Many Requests []')) : gh(tool, args));
+  limited.seen = gh.seen;
+  const {output} = await go(limited, {});
+  assert.strictEqual(gh.seen.filter((s) => s.tool === 'list_commits').length, 1, 'one commit asked for, none after the limit');
+  assert.strictEqual(output.coverage.capHit, true);
+  assert.ok(output.summary.includes('; a limit was reached, so some logs or job lists were not read'), output.summary);
+});
