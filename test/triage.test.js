@@ -369,7 +369,7 @@ test('each cached run records the algorithm that signed it; the same algorithm k
   assert.strictEqual(first.output.coverage.historyRebuilt, false, 'a first call rebuilds nothing');
   assert.strictEqual(signCalls(first.ctx), 3, 'no probe: the target\'s own sign output names the algorithm');
   const cache = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
-  assert.deepStrictEqual(jobEntries(cache).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules4+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
+  assert.deepStrictEqual(jobEntries(cache).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules5+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
   const again = world({runs: THREE()});
   const second = await go(again, {}, first.dataRoot);
   assert.strictEqual(again.logsFetched(), 1, 'only the latest failed run, for its error lines');
@@ -394,7 +394,7 @@ for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0+rule
     assert.match(second.output.summary, /; history rebuilt \(the failure signature changed\)/);
     const rewritten = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
     assert.ok(!JSON.stringify(rewritten).includes('5'.repeat(64)), 'every one rewritten with the current algorithm');
-    assert.deepStrictEqual(jobEntries(rewritten).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules4+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
+    assert.deepStrictEqual(jobEntries(rewritten).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules5+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
   });
 }
 
@@ -624,7 +624,7 @@ test('runs whose jobs cannot be listed do not starve the history behind them', a
   const call = ctx.call;
   ctx.call = async (address, input) => {
     const n = Number(input.runId);
-    if (/githubService\.failedJobs$/.test(address) && n < 100 && n > 80) throw Object.assign(new Error('jobs unavailable'), {code: 'UPSTREAM_ERROR'});
+    if (/githubService\.failedJobs$/.test(address) && n < 100 && n > 80) throw Object.assign(new Error('jobs unavailable'), {code: 'REMOTE_FAILED'});
     return call(address, input);
   };
   const output = await triage({repo: 'acme/widgets', window: 40, maxLogs: 20, ownerHint: false}, ctx, {dataRoot: tmp()});
@@ -691,7 +691,7 @@ test('runs whose jobs cannot be listed stay within the report\'s 50: the report 
   const ctx = makeCtx(world({runs}));
   const call = ctx.call;
   ctx.call = async (address, input) => {
-    if (/githubService\.failedJobs$/.test(address) && input.runId !== '100') throw Object.assign(new Error('jobs unavailable'), {code: 'UPSTREAM_ERROR'});
+    if (/githubService\.failedJobs$/.test(address) && input.runId !== '100') throw Object.assign(new Error('jobs unavailable'), {code: 'REMOTE_FAILED'});
     return call(address, input);
   };
   const output = await triage({repo: 'acme/widgets', window: 60, maxLogs: 20, ownerHint: false}, ctx, {dataRoot: tmp()});
@@ -788,7 +788,7 @@ test('job listings are bounded: max_logs plus the 50 unavailable, however many f
   ctx.call = async (address, input) => {
     if (/githubService\.failedJobs$/.test(address)) {
       listings += 1;
-      if (input.runId !== '1000') throw Object.assign(new Error('jobs unavailable'), {code: 'UPSTREAM_ERROR'});
+      if (input.runId !== '1000') throw Object.assign(new Error('jobs unavailable'), {code: 'REMOTE_FAILED'});
     }
     return call(address, input);
   };
@@ -922,7 +922,7 @@ test('first_error and the first errors are the failing step\'s, not an earlier s
 
 // A6: max_logs keeps room for the history: a run of 24 failed jobs no
 // longer spends every log on itself, call after call
-test('a run with many failed jobs leaves half of max_logs to the history, and the summary names the cap', async () => {
+test('a run with many failed jobs leaves half of max_logs to the history, and the summary says a limit was reached', async () => {
   const jobs = Array.from({length: 24}, (_, k) => job(1000 + k, FAIL(1), {name: `test (${k})`}));
   const older = [8, 7, 6, 5, 4, 3].map((n) => run(n, 'failure', n, {jobs: [job(n * 10, FAIL(1), {name: 'test (0)'})]}));
   const gh = world({runs: [run(9, 'failure', 9, {jobs}), ...older]});
@@ -931,7 +931,7 @@ test('a run with many failed jobs leaves half of max_logs to the history, and th
   assert.strictEqual(output.failed_jobs[0].history.verdict, 'recurring');
   assert.strictEqual(output.coverage.capHit, true);
   assert.ok(output.coverage.logsFetched <= 20, String(output.coverage.logsFetched));
-  assert.match(output.summary, /log cap/);
+  assert.match(output.summary, /; a limit was reached, so some logs or job lists were not read\./);
 });
 
 // A7: a run_id that names a run that did not fail is said so, not triaged

@@ -28,10 +28,10 @@ test('a triage result matches the declared output', async () => {
   }
 });
 
-test('the report\'s longest summary (500 characters) with the longest receipt sentence still matches the declared output', async () => {
+test('the report\'s longest summary (520 characters) with the longest receipt sentence still matches the declared output', async () => {
   const {RECEIPT_MAX} = require('../lib/chain');
   const out = await go(recordedServer(), {repo: 'mchen6/countinghouse'});
-  out.summary = `${'s'.repeat(500)} ${'r'.repeat(RECEIPT_MAX)}`;
+  out.summary = `${'s'.repeat(520)} ${'r'.repeat(RECEIPT_MAX)}`;
   assert.ok(validOutput(out), JSON.stringify(validOutput.errors));
   out.summary += 'r';
   assert.ok(!validOutput(out), 'and no longer');
