@@ -233,6 +233,26 @@ confinement: countinghouse does not enforce a network permission yet (its
 so their code could still open a connection. The tests use each part's tarball, recorded in
 [test/fixtures/parts](test/fixtures/parts/README.md).
 
+## Known limits
+
+A failure that happened before can still read as `new` in these cases:
+
+- **On another leg of a matrix, or under a renamed job.** A job is compared
+  with the jobs of the same name, and a matrix leg is usually part of a job's
+  name. When the same failure was seen only on another leg, the verdict is
+  `unknown` (why: `seen_under_another_job_name`) if the pack has already read
+  that leg's failure, in this call or an earlier one, and it has the same
+  signature; otherwise it can read as `new`.
+- **Beside another failure.** The signature covers the failing step and its
+  error lines. When a second failure in the same step adds error lines, for
+  example a second test failing beside it, the signature usually differs from
+  the one from the runs where it failed alone, so it can read as `new`.
+- **With a random word.** A failing line that names a random word (a generated
+  temporary file's name, say, or one of letters only) still changes the
+  signature, so a recurring failure can read as new.
+- **After the failing step is renamed.** The step's name is part of the
+  signature, so the same failure under a renamed step reads as `new`.
+
 ## Verify it yourself
 
 Three facts you can check on your own machine, with your ch-local home as
