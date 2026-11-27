@@ -400,7 +400,7 @@
                     "type": "object",
                     "properties": {
                       "logins": {
-                        "title": "GitHub logins, as ch-step-owner-hint returns them",
+                        "title": "GitHub logins, as ch-step-owner-hint returns them; none when the runtime refused reading a commit's author",
                         "type": "array",
                         "maxItems": 3,
                         "items": {
