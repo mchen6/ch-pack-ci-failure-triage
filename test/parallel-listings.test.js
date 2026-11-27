@@ -204,3 +204,32 @@ test('a commit read the runtime refuses is said in owner_hint, never a silent ga
   const {output} = await go(two(), {}, {wrap});
   assert.ok(output.owner_hint === null || !output.owner_hint.why.some((w) => w.startsWith('No owner hint')), JSON.stringify(output.owner_hint));
 });
+
+// (error-patterns 0.3.1 and failure-signature 0.3.0 through the whole chain)
+const runOf = (id, m, lines) => run(id, 'failure', m, {jobs: [job(id * 10, runnerLog('Run npm test', lines))]});
+
+test('node\'s far comparison is shown among the values, and a secret on either side of it comes out redacted', async () => {
+  // (a GitHub token's shape, built here: never written whole in this file)
+  const token = ['gh', 'p_', 'Zq7'.repeat(12)].join('');
+  const message = Array.from({length: 40}, (_, i) => `  diagnosis line ${i}: the daemon was running`);
+  const lines = ['✖ the shared runtime (44394.95ms)', '  AssertionError [ERR_ASSERTION]: FAIL a loosening is refused', ...message, '', `  '${token}' !== ''`, '', '      at TestContext.<anonymous> (/home/runner/work/x/test/acceptance.test.js:452:10)'];
+  const {output} = await go(world({runs: [runOf(30, 100, lines)]}), {});
+  const text = JSON.stringify(output);
+  assert.ok(!text.includes(token), 'the token never reaches the answer');
+  assert.ok(output.errors.some((e) => typeof e === 'string' && e.includes('<githubToken>') && e.includes('!==')), JSON.stringify(output.errors).slice(0, 800));
+});
+
+test('a FAIL\'s message that differs only in what changes per run keeps a failure recurring; a random word or temp name does not (known limits)', async () => {
+  const fail = (detail) => ['FAIL docs/guide.md:339', detail, ''];
+  for (const [a, b] of [['  timeout after 30s', '  timeout after 31.2s'], ['  connection refused 127.0.0.1:43121', '  connection refused 127.0.0.1:51877'],
+    ['  request 7f3a9c2e failed', '  request a81b4d07 failed']]) {
+    const {output} = await go(world({runs: [runOf(30, 100, fail(a)), runOf(29, 99, fail(b))]}), {});
+    assert.strictEqual(output.failed_jobs[0].history.verdict, 'recurring', a);
+  }
+  // (the known limits, shared with every error line: a letters-only random
+  // word, and a generated temp file's name)
+  for (const [a, b] of [['  worker nqzvbx crashed', '  worker hjtrlk crashed'], ['  could not run /tmp/tmpjg271vyh.py', '  could not run /tmp/tmpab12cd3e.py']]) {
+    const {output} = await go(world({runs: [runOf(30, 100, fail(a)), runOf(29, 99, fail(b))]}), {});
+    assert.strictEqual(output.failed_jobs[0].history.verdict, 'new', a);
+  }
+});

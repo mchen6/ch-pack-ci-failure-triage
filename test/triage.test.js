@@ -369,7 +369,7 @@ test('each cached run records the algorithm that signed it; the same algorithm k
   assert.strictEqual(first.output.coverage.historyRebuilt, false, 'a first call rebuilds nothing');
   assert.strictEqual(signCalls(first.ctx), 3, 'no probe: the target\'s own sign output names the algorithm');
   const cache = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
-  assert.deepStrictEqual(jobEntries(cache).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules4+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
+  assert.deepStrictEqual(jobEntries(cache).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules5+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
   const again = world({runs: THREE()});
   const second = await go(again, {}, first.dataRoot);
   assert.strictEqual(again.logsFetched(), 1, 'only the latest failed run, for its error lines');
@@ -394,7 +394,7 @@ for (const [why, set] of [['another algorithm', (r) => { r.algorithm = 'fs0+rule
     assert.match(second.output.summary, /; history rebuilt \(the failure signature changed\)/);
     const rewritten = JSON.parse(fs.readFileSync(cacheFile(first.dataRoot), 'utf8'));
     assert.ok(!JSON.stringify(rewritten).includes('5'.repeat(64)), 'every one rewritten with the current algorithm');
-    assert.deepStrictEqual(jobEntries(rewritten).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules4+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
+    assert.deepStrictEqual(jobEntries(rewritten).map((r) => r.algorithm), [0, 1, 2].map(() => `fs1+rules5+names2.${require('../lib/cache').keyId(first.dataRoot)}`));
   });
 }
 
