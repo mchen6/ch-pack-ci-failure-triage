@@ -46,7 +46,7 @@ the failure reach it.
 three shapes). The triage result has exactly these fields:
 - **`summary`:** the pack's own words, a fixed sentence that the fields are
   data, then the receipt sentence when the runtime has `ctx.usage()` (below); at
-  most 801 characters.
+  most 821 characters.
 - **`run`:** `{id, url, branch, commit, workflow, job, step}`.
 - **`failed_jobs`:** every failed job of the run (at most 50 listed), each
   `{job, step, first_error, history}`, and `values`, `values_omitted` or
@@ -57,14 +57,24 @@ three shapes). The triage result has exactly these fields:
     the window's other runs that did not pass: `{verdict, count, runIds,
     firstSeen, lastSeen, notCompared, why}`. `runIds` has up to
     ten of the newest, and `count` counts them all.
-  - `verdict` is `new`, `flaky`, `recurring` or `unknown`. `new` means no job
-    of this name failed the same way in the runs compared. `unknown` does not
-    say whether the failure is new: `why` says whether this job's own log was not
-    read (`own_log_not_read`), some runs could not be compared
-    (`history_not_compared`; `notCompared` counts the runs), or a job of
-    another name is known to have failed the same way
-    (`seen_under_another_job_name`). Only runs that did not pass are listed,
-    so when the triaged run is itself a success, the window's other successes
+  - `verdict` is `new`, `flaky`, `recurring` or `unknown`:
+    - `new`: this job's failure is in no other run compared in the window, and
+      no failure after it went unread.
+    - `flaky`: the same failure is on a commit that also passed in the window
+      (a re-run that passed counts), or on one branch it alternated with
+      passing runs at least twice (failed, passed, failed), even when a fix
+      came in between.
+    - `recurring`: the same failure is in more than one run compared, and it
+      is not flaky. Runs after this one count too.
+    - `unknown` does not say whether the failure is new: `why` says whether
+      this job's own log was not read (`own_log_not_read`), some runs could
+      not be compared (`history_not_compared`; `notCompared` counts the runs),
+      or a job of another name is known to have failed the same way
+      (`seen_under_another_job_name`).
+
+    "The same failure" means the same signature from ch-step-failure-signature,
+    for the job of the same name. Only runs that did not pass are listed, so
+    when the triaged run is itself a success, the window's other successes
     could not be compared. A run that passed on a re-run counts as not compared
     too, unless what it failed before was read. A run that did not pass and whose
     workflow can't be told counts as not compared, so it never makes a failure new.
@@ -97,6 +107,10 @@ three shapes). The triage result has exactly these fields:
 - **`coverage`:** `{runsListed, failedRuns, logsFetched, logsExpired,
   logsTruncated, logsUnavailable, cacheHits, capHit, historyRebuilt}`.
   - `logsUnavailable` is a list of `{runId, job}`.
+  - `capHit` says the history was not read in full: max_logs was reached, 50
+    logs or job lists could not be had, or GitHub answered with a rate limit,
+    after which the triage asks GitHub nothing more. The runs not read count as
+    not compared.
 
 When no run in the window failed, the answer has exactly `{status:
 'no-failed-run', summary, lastSuccess, coverage}`. `lastSuccess` is `{id,
@@ -122,7 +136,7 @@ Bytes only. A token estimate is the usage report's
 The sentence is left out when the runtime has no `ctx.usage()`, when it
 answers null or refuses, when it answers anything but counts and a
 one-line sentence, or when the whole would be over 300 characters (the
-summary's declared length allows for the report's 500 and these 300).
+summary's declared length allows for the report's 520 and these 300).
 
 **Coverage, stated, never hidden:**
 - runs considered (the failing run's workflow only, so a Pages deploy is not
@@ -266,7 +280,7 @@ npm run validate   # packs the module and runs countinghouse-validate on the tar
 ```
 
 Pure JavaScript, no native module. Node 22.16 or later, as countinghouse.
-CI runs Node 24 on Linux, macOS and Windows.
+CI runs Node 24 on Linux, macOS and Windows, and Node 22.16, the floor, on Linux.
 
 ## Publishing
 

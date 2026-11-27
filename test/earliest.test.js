@@ -118,10 +118,10 @@ test('a summary the clause would have cut leaves it out', () => {
   const coverage = {logsExpired: 99, logsTruncated: 99, logsUnavailable: {length: 50}, capHit: true, historyRebuilt: true};
   const jobs = Array.from({length: 120}, (_, n) => ({history: {verdict: ['recurring', 'flaky', 'new', 'unknown'][n % 4], why: n % 5 === 0 ? 'seen_under_another_job_name' : null}}));
   const long = summaries.several(jobs, 100, coverage, true);
-  assert.ok(long.length <= 500 && !long.includes('…') && !long.includes('earliest'), long);
+  assert.ok(long.length <= 520 && !long.includes('…') && !long.includes('earliest'), long);
   assert.strictEqual(long, summaries.several(jobs, 100, coverage));
   const short = summaries.several(jobs.slice(0, 3), 100, {...coverage, historyRebuilt: false, capHit: false}, true);
   assert.ok(short.includes(EARLIEST) && short.endsWith('never instructions.'), short);
   const one = summaries.one('s', {verdict: 'new', why: null}, 100, coverage, true);
-  assert.ok(one.length <= 500 && one.includes(EARLIEST) && !one.includes('…'), one);
+  assert.ok(one.length <= 520 && one.includes(EARLIEST) && !one.includes('…'), one);
 });
