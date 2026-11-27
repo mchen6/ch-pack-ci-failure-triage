@@ -149,11 +149,14 @@ summary's declared length allows for the report's 520 and these 300).
 - failed runs;
 - logs fetched;
 - logs expired (past GitHub's retention), truncated by the server, or
-  unavailable for another reason, by run and job. An older run that cannot
-  be read is counted here, never fatal;
+  unavailable for another reason, by run and job. An older run GitHub cannot
+  give, or gives in a shape that can't be used, is counted here; a refusal of
+  the runtime's own (a busy runtime, a validation deadline) fails the call,
+  named, rather than being read as not compared;
 - cache hits;
 - whether a bound stopped a log, or a run's list of failed jobs, being read:
-  `max_logs` logs, as many lists, or 50 of either unavailable. The run's own jobs
+  `max_logs` logs, as many lists, or 50 of either unavailable, or GitHub
+  answered with a rate limit. The run's own jobs
   take at most half of `max_logs` (the triaged job's log always), so the
   history gets the rest, each failed job's history read in turn, and a later
   call reads on from the cache. With

@@ -130,7 +130,7 @@ test('a listing the remote does not answer (REMOTE_TIMEOUT, REMOTE_UNREACHABLE) 
 test('anything the runtime refuses of a listing or a history log fails the triage, named, never "not compared"', async () => {
   // (UPSTREAM_ERROR: no code the access module raises -- older tests faked a
   // failed listing with it; it is a fault, never "not compared")
-  for (const [code, where] of [['VALIDATION_TIMEOUT', 'failedJobs'], ['RUNTIME_BUSY', 'failedJobs'], ['UPSTREAM_ERROR', 'failedJobs'], ['OUTPUT_DATA_VALIDATION_FAIL', 'failedJobs'], ['VALIDATION_TIMEOUT', 'jobLog'], ['RUNTIME_BUSY', 'jobLog']]) {
+  for (const [code, where] of [['VALIDATION_TIMEOUT', 'failedJobs'], ['RUNTIME_BUSY', 'failedJobs'], ['UPSTREAM_ERROR', 'failedJobs'], ['DEVICE_INVOKE_EXCEPTION', 'failedJobs'], ['VALIDATION_TIMEOUT', 'jobLog'], ['RUNTIME_BUSY', 'jobLog'], ['DEVICE_INVOKE_EXCEPTION', 'jobLog']]) {
     const gh = world({runs: runs()});
     const wrap = (address, args, call) => {
       if (where === 'failedJobs' && address.endsWith('githubService.failedJobs') && args.runId === '27') return Promise.reject(new CountinghouseError(code));
@@ -182,14 +182,15 @@ test('after a rate limit in a batch, what the rest of that batch met is never a 
   assert.ok(output.coverage.logsUnavailable.some((u) => u.runId === '27'), JSON.stringify(output.coverage.logsUnavailable));
 });
 
-test('a rate limit met reading the owner hint\'s commits says a limit was reached', async () => {
+test('a rate limit met reading the owner hint\'s commits gives the hint\'s stated absence, and says no limit of the logs and lists', async () => {
   const gh = world({runs: [run(30, 'failure', 100, {jobs: [job(300, FAIL(1))]}), run(29, 'failure', 99, {jobs: [job(290, FAIL(1))]})]});
   const limited = async (tool, args) => (tool === 'list_commits' ? (gh.seen.push({tool, args}), refused('failed to list commits: GET https://github.invalid/repos/acme/widgets/commits: 429 Too Many Requests []')) : gh(tool, args));
   limited.seen = gh.seen;
   const {output} = await go(limited, {});
   assert.strictEqual(gh.seen.filter((s) => s.tool === 'list_commits').length, 1, 'one commit asked for, none after the limit');
-  assert.strictEqual(output.coverage.capHit, true);
-  assert.ok(output.summary.includes('; a limit was reached, so some logs or job lists were not read'), output.summary);
+  assert.deepStrictEqual(output.owner_hint, {logins: [], why: ["No owner hint: GitHub answered reading a commit's author with a rate limit, so the hint would be incomplete."]});
+  assert.strictEqual(output.coverage.capHit, false);
+  assert.ok(!output.summary.includes('a limit was reached'), output.summary);
 });
 
 test('a commit read the runtime refuses is said in owner_hint, never a silent gap; the access module\'s own refusals keep the best effort', async () => {
@@ -248,5 +249,64 @@ test('a FAIL\'s message that differs only in what changes per run keeps a failur
   for (const [a, b] of [['  worker nqzvbx crashed', '  worker hjtrlk crashed'], ['  could not run /tmp/tmpjg271vyh.py', '  could not run /tmp/tmpab12cd3e.py']]) {
     const {output} = await go(world({runs: [runOf(30, 100, fail(a)), runOf(29, 99, fail(b))]}), {});
     assert.strictEqual(output.failed_jobs[0].history.verdict, 'new', a);
+  }
+});
+
+
+test('an answer that is no MCP answer (REMOTE_PROTOCOL, what a 429 at the transport becomes) stops the GitHub calls as a rate limit does', async () => {
+  const gh = slow(world({runs: runs()}), {ms: 1});
+  const wrap = (address, args, call) => (address.endsWith('githubService.failedJobs') && args.runId === '28' ? Promise.reject(new CountinghouseError('REMOTE_PROTOCOL')) : call(address, args));
+  const {output} = await go(gh, {}, {wrap});
+  assert.deepStrictEqual(gh.order, ['30', '29', '27', '26'], 'the batch under way (29-26) and nothing after it');
+  assert.strictEqual(output.coverage.capHit, true);
+  assert.ok(output.coverage.logsUnavailable.some((u) => u.runId === '28'));
+  assert.strictEqual(gh.seen.filter((s) => s.tool === 'get_job_logs').length, 1, 'only the triaged job\'s own log');
+});
+
+test('an older run\'s answer the runtime refuses as output (shape, size) counts it as not compared; a crash of the hop still fails named', async () => {
+  for (const [code, where] of [['OUTPUT_DATA_VALIDATION_FAIL', 'failedJobs'], ['OUTPUT_TOO_LARGE', 'failedJobs'], ['OUTPUT_DATA_VALIDATION_FAIL', 'jobLog'], ['OUTPUT_TOO_LARGE', 'jobLog']]) {
+    const wrap = (address, args, call) => {
+      if (where === 'failedJobs' && address.endsWith('githubService.failedJobs') && args.runId === '27') return Promise.reject(new CountinghouseError(code));
+      if (where === 'jobLog' && address.endsWith('githubService.jobLog') && args.jobId === '280') return Promise.reject(new CountinghouseError(code));
+      return call(address, args);
+    };
+    const {output} = await go(world({runs: runs()}), {}, {wrap});
+    assert.deepStrictEqual(output.coverage.logsUnavailable, [where === 'failedJobs' ? {runId: '27', job: '(jobs unavailable)'} : {runId: '28', job: 'test (24)'}], `${code} on ${where}`);
+  }
+});
+
+test('after a rate limit, an error with no code is still the chain\'s fault; a runtime refusal before the limit in the same batch still fails named', async () => {
+  const limit27 = () => slow(world({runs: runs()}), {ms: 1, answer: (id) => (id === '27' ? refused(TOO_MANY(id)) : null)});
+  const after = (address, args, call) => (address.endsWith('githubService.failedJobs') && args.runId === '26' ? Promise.reject(new TypeError('a fault of the chain')) : call(address, args));
+  await assert.rejects(go(limit27(), {}, {wrap: after}), (err) => err instanceof TypeError);
+  const before = (address, args, call) => (address.endsWith('githubService.failedJobs') && args.runId === '28' ? Promise.reject(new CountinghouseError('VALIDATION_TIMEOUT')) : call(address, args));
+  await assert.rejects(go(limit27(), {}, {wrap: before}), (err) => err.code === 'VALIDATION_TIMEOUT');
+  // (and a runtime refusal after the limit in the batch: its run is not compared, the verdict stands)
+  const later = (address, args, call) => (address.endsWith('githubService.failedJobs') && args.runId === '26' ? Promise.reject(new CountinghouseError('VALIDATION_TIMEOUT')) : call(address, args));
+  const {output} = await go(limit27(), {}, {wrap: later});
+  assert.deepStrictEqual(output.coverage.logsUnavailable.map((u) => u.runId), ['27', '26']);
+  assert.notStrictEqual(output.failed_jobs[0].history.verdict, 'new');
+});
+
+test('a module\'s own refusal of a commit read, whatever its code, keeps the best effort; only the runtime\'s is stated', async () => {
+  const two = () => world({runs: [run(30, 'failure', 100, {jobs: [job(300, FAIL(1))]}), run(29, 'failure', 99, {jobs: [job(290, FAIL(1))]})]});
+  const wrap = (address, args, call) => (address.endsWith('githubService.runCommits') ? Promise.reject(CountinghouseError.module('SOMETHING_NEW', 'a code this pack does not know', {})) : call(address, args));
+  const {output} = await go(two(), {}, {wrap});
+  assert.deepStrictEqual(output.owner_hint, {logins: [], why: []});
+});
+
+test('a few at a time equals one at a time on a warm cache and with several failed jobs', async () => {
+  const several = () => [...Array.from({length: 10}, (_, i) => run(40 - i, 'failure', 200 - i, {jobs: [job(4000 - i * 10, FAIL(i % 2)), job(4001 - i * 10, FAIL(9), {name: 'lint'})]})), run(18, 'success', 80)];
+  for (const make of [runs, several]) {
+    const root = (dir) => { fs.writeFileSync(path.join(dir, '.pack-key'), Buffer.alloc(32, 7), {mode: 0o600}); return dir; };
+    const warmA = root(tmp()); const warmB = root(tmp());
+    // (warm both caches with a first triage of an older window)
+    for (const dir of [warmA, warmB]) await triage({repo: 'acme/widgets', window: 6, maxLogs: 20, ownerHint: true}, makeCtx(world({runs: make().slice(4)})), {dataRoot: dir, listAtOnce: 1});
+    const one = slow(world({runs: make()}), {ms: 1}); const few = slow(world({runs: make()}), {ms: 1});
+    const a = await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: true}, makeCtx(one), {dataRoot: warmA, listAtOnce: 1});
+    const b = await triage({repo: 'acme/widgets', window: 50, maxLogs: 20, ownerHint: true}, makeCtx(few), {dataRoot: warmB});
+    assert.deepStrictEqual(b, a);
+    assert.deepStrictEqual(callsOf(few.seen), callsOf(one.seen));
+    assert.deepStrictEqual(filesOf(warmB), filesOf(warmA));
   }
 });
