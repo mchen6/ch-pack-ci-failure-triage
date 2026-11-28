@@ -13,9 +13,11 @@ The chain is tested in-process here, and end to end on a live runtime by
 recorded GitHub stand-in.
 
 One tool, `ci_failure_triage`. Chain kind: **carrying: the logs cross the
-runtime, not the model.** One call does what would take the model dozens of
-GitHub calls and thousands of log lines, and only the few lines that explain
-the failure reach it.
+runtime, not the model.** One call does the GitHub reading the model would
+otherwise do itself (the recent runs, their failed jobs and their logs, within
+the default limits, and fewer once the pack's cache knows the window's runs),
+reads logs that can run to thousands of lines, and lets only the few lines that
+explain the failure reach the model.
 
 - **Server:** GitHub, through [ch-access-github](https://github.com/mchen6/ch-access-github),
   which owns the remote. This module declares no remote and never sees a token.
