@@ -96,6 +96,6 @@ test('each prompt\'s arguments are the tool\'s own: repo optional, run_id only w
   }
 });
 
-test('the pack\'s version carries the prompts: 0.7.5', () => {
-  assert.strictEqual(pkg.version, '0.7.5');
+test('the pack\'s version carries the prompts: 0.7.6', () => {
+  assert.strictEqual(pkg.version, '0.7.6');
 });
