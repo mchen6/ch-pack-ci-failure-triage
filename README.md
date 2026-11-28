@@ -253,6 +253,12 @@ A failure that happened before can still read as `new` in these cases:
 - **After the failing step is renamed.** The step's name is part of the
   signature, so the same failure under a renamed step reads as `new`.
 
+In a failed assertion's expected and actual values, any token containing a
+character outside ASCII (other scripts, accented letters, symbols) is shown as
+`<withheld>`, a token being the text between spaces and punctuation such as
+quotes, brackets, commas, colons and `=`; in a file path only those characters
+are withheld. The failure's error lines are not affected.
+
 ## Verify it yourself
 
 Three facts you can check on your own machine, with your ch-local home as
